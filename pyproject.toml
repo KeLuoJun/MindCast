@@ -1,7 +1,27 @@
 [project]
 name = "mindcast"
 version = "0.1.0"
-description = "Add your description here"
+description = "MindCast — Multi-Agent AI Podcast Generator"
 readme = "README.md"
 requires-python = ">=3.13"
-dependencies = []
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    "httpx>=0.27.0",
+    "openai>=1.50.0",
+    "tavily-python>=0.5.0",
+    "pydub>=0.25.1",
+    "audioop-lts>=0.2.1",
+    "python-dotenv>=1.0.0",
+    "pydantic-settings>=2.5.0",
+    "sse-starlette>=2.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
+]
+
+[tool.setuptools.packages.find]
+include = ["backend*"]

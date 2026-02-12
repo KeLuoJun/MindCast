@@ -8,3 +8,21 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Environment variables
+.env
+
+# Output files
+output/episodes/*.mp3
+output/episodes/*.json
+output/test_*.mp3
+
+# Node.js
+frontend/node_modules/
+frontend/dist/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
