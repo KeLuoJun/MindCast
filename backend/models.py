@@ -6,6 +6,7 @@ import uuid
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -48,6 +49,7 @@ class PersonaConfig(BaseModel):
     personality: str
     occupation: str
     speaking_style: str
+    stance_bias: str = ""
     voice_id: str
     background: str  # life experience / expertise
 
@@ -75,9 +77,48 @@ class EpisodePlan(BaseModel):
     """Structured outline planned by the host agent."""
     topic: str
     summary: str
-    talking_points: list[str] = Field(default_factory=list)
-    opening: str = ""
-    closing: str = ""
+    talking_points: list[str | dict[str, Any]] = Field(default_factory=list)
+    opening: str | dict[str, Any] = ""
+    closing: str | dict[str, Any] = ""
+    key_questions: list[str] = Field(default_factory=list)
+    unexpected_angle: str = ""
+
+    def opening_text(self) -> str:
+        if isinstance(self.opening, str):
+            return self.opening
+        return str(self.opening.get("hook") or self.opening.get("stance_hint") or "")
+
+    def closing_text(self) -> str:
+        if isinstance(self.closing, str):
+            return self.closing
+        return str(self.closing.get("open_question") or self.closing.get("host_takeaway") or "")
+
+    def talking_point_text(self, index: int) -> str:
+        if index < 0 or index >= len(self.talking_points):
+            return ""
+        point = self.talking_points[index]
+        if isinstance(point, str):
+            return point
+        return str(point.get("point") or "")
+
+    def talking_point_depth_hint(self, index: int) -> str:
+        if index < 0 or index >= len(self.talking_points):
+            return ""
+        point = self.talking_points[index]
+        if isinstance(point, dict):
+            return str(point.get("depth_hint") or "")
+        return ""
+
+    def talking_point_conflict_setup(self, index: int) -> str:
+        if index < 0 or index >= len(self.talking_points):
+            return ""
+        point = self.talking_points[index]
+        if isinstance(point, dict):
+            return str(point.get("conflict_setup") or "")
+        return ""
+
+    def talking_point_texts(self) -> list[str]:
+        return [self.talking_point_text(i) for i in range(len(self.talking_points)) if self.talking_point_text(i)]
 
 
 class Episode(BaseModel):
