@@ -151,6 +151,67 @@ class HostAgent(BaseAgent):
                 closing="感谢收听",
             )
 
+    async def decide_need_fresh_search(
+        self,
+        query: str,
+        rag_snippets: list[str],
+    ) -> dict:
+        """Decide whether to call Tavily for fresher / deeper info.
+
+        Returns a dict:
+        {
+            "need_fresh_search": bool,
+            "reason": str,
+            "focus": str
+        }
+        """
+        rag_text = "\n".join(
+            f"{i+1}. {snippet[:280]}"
+            for i, snippet in enumerate(rag_snippets[:6])
+        )
+
+        prompt = f"""你是播客主编，需要判断当前资料是否足够支撑这一搜索角度。
+
+【搜索角度】
+{query}
+
+【知识库检索结果（RAG）】
+{rag_text or '（暂无）'}
+
+判断规则：
+1. 如果RAG内容太少、过旧、信息密度不够，或缺关键事实，返回 need_fresh_search=true
+2. 如果RAG已足够支撑该角度讨论，返回 need_fresh_search=false
+3. 如果话题明显需要最新动态（如“刚发布/本周/最新进展”），优先返回 true
+
+请严格返回JSON（不要markdown代码块）：
+{{
+  "need_fresh_search": true 或 false,
+  "reason": "一句话说明判断原因",
+  "focus": "若需要新搜索，给出一个更聚焦的搜索意图；否则给空字符串"
+}}"""
+
+        response = await self.think(prompt, temperature=0.2, max_tokens=400)
+        try:
+            cleaned = response.strip()
+            if cleaned.startswith("```"):
+                cleaned = cleaned.split("\n", 1)[1]
+            if cleaned.endswith("```"):
+                cleaned = cleaned.rsplit("```", 1)[0]
+            cleaned = cleaned.strip()
+            data = json.loads(cleaned)
+            return {
+                "need_fresh_search": bool(data.get("need_fresh_search", False)),
+                "reason": str(data.get("reason", "")),
+                "focus": str(data.get("focus", "")),
+            }
+        except Exception:
+            logger.warning("Failed to parse fresh-search decision JSON: %s", response)
+            return {
+                "need_fresh_search": len(rag_snippets) < 2,
+                "reason": "fallback: rag信息不足时补充搜索",
+                "focus": query,
+            }
+
     # ------------------------------------------------------------------
     # Line generation
     # ------------------------------------------------------------------

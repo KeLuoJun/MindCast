@@ -21,6 +21,10 @@ from backend.api.schemas import (
 )
 from backend.config import settings
 from backend.knowledge import get_knowledge_base
+from backend.knowledge.chroma_kb import (
+    BACKGROUND_MATERIAL,
+    KNOWLEDGE_SCOPE_GLOBAL,
+)
 from backend.models import DetailedInfo, Episode
 from backend.services.run_logger import EpisodeRunLogger
 from backend.services.news_service import get_news_service
@@ -64,8 +68,32 @@ async def debug_script_preview(req: ScriptPreviewRequest | None = None):
         : payload.max_search_queries]
 
     detailed_info: list[DetailedInfo] = []
+    kb = get_knowledge_base()
     for query in search_queries:
-        detailed_info.append(await orchestrator._news.search_detail(query))
+        rag_docs = await kb.query(
+            query,
+            top_k=4,
+            collection=BACKGROUND_MATERIAL,
+            scope=KNOWLEDGE_SCOPE_GLOBAL,
+        )
+        rag_snippets = [d.get("content", "") for d in rag_docs if d.get("content")]
+        decision = await orchestrator.host.decide_need_fresh_search(query, rag_snippets)
+        need_fresh_search = bool(decision.get("need_fresh_search", False))
+        if not rag_snippets:
+            need_fresh_search = True
+
+        if need_fresh_search:
+            focus_query = decision.get("focus", "").strip() or query
+            detailed_info.append(await orchestrator._news.search_detail(focus_query))
+        else:
+            rag_answer = "\n\n".join(f"- {txt[:300]}" for txt in rag_snippets[:4])
+            detailed_info.append(
+                DetailedInfo(
+                    query=query,
+                    answer=f"基于知识库历史资料整理：\n{rag_answer}" if rag_answer else "",
+                    results=[],
+                )
+            )
 
     plan = await orchestrator.host.plan_episode(
         topic,

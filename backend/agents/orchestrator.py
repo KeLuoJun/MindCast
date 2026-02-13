@@ -14,6 +14,10 @@ from backend.agents.host import HostAgent
 from backend.agents.personas import GUEST_PERSONAS
 from backend.config import settings
 from backend.knowledge import get_knowledge_base
+from backend.knowledge.chroma_kb import (
+    BACKGROUND_MATERIAL,
+    KNOWLEDGE_SCOPE_GLOBAL,
+)
 from backend.logging_config import get_episode_file_handler
 from backend.models import DetailedInfo, DialogueLine, Episode, EpisodePlan
 from backend.services.audio_service import AudioService, audio_service
@@ -192,6 +196,7 @@ class PodcastOrchestrator:
         await self._emit_progress(state, "research", "正在深度搜索…")
         search_queries = topic.get("search_queries", [])[:5]
         detailed_info: list[DetailedInfo] = []
+        kb = get_knowledge_base()
 
         for i, query in enumerate(search_queries):
             await self._emit_progress(
@@ -201,13 +206,45 @@ class PodcastOrchestrator:
                 payload={"query": query, "index": i +
                          1, "total": len(search_queries)},
             )
-            info = await self._news.search_detail(query)
+
+            # 1) Retrieve from long-term RAG first
+            rag_docs = await kb.query(
+                query,
+                top_k=4,
+                collection=BACKGROUND_MATERIAL,
+                scope=KNOWLEDGE_SCOPE_GLOBAL,
+            )
+            rag_snippets = [d.get("content", "") for d in rag_docs if d.get("content")]
+
+            # 2) Let host agent decide whether fresh web search is needed
+            decision = await self.host.decide_need_fresh_search(query, rag_snippets)
+            need_fresh_search = bool(decision.get("need_fresh_search", False))
+            if not rag_snippets:
+                need_fresh_search = True
+
+            if need_fresh_search:
+                focus_query = decision.get("focus", "").strip() or query
+                info = await self._news.search_detail(focus_query)
+                info_source = "tavily"
+            else:
+                rag_answer = "\n\n".join(f"- {txt[:300]}" for txt in rag_snippets[:4])
+                info = DetailedInfo(
+                    query=query,
+                    answer=f"基于知识库历史资料整理：\n{rag_answer}" if rag_answer else "",
+                    results=[],
+                )
+                info_source = "rag"
+
             detailed_info.append(info)
             state["run_logger"].event(
                 "research",
                 "search result captured",
                 payload={
                     "query": query,
+                    "source": info_source,
+                    "need_fresh_search": need_fresh_search,
+                    "decision_reason": decision.get("reason", ""),
+                    "rag_hit_count": len(rag_docs),
                     "answer": info.answer,
                     "result_count": len(info.results),
                     "result_titles": [item.title for item in info.results],

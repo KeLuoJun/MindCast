@@ -31,6 +31,11 @@ BACKGROUND_MATERIAL = "background_material"
 ALL_COLLECTIONS = [HISTORY_ARCHIVE, EXPERT_OPINIONS,
                    FACT_CHECK, BACKGROUND_MATERIAL]
 
+# Knowledge scope metadata
+KNOWLEDGE_SCOPE_KEY = "knowledge_scope"
+KNOWLEDGE_SCOPE_GLOBAL = "global"
+KNOWLEDGE_SCOPE_TASK = "task"
+
 
 def _doc_id(text: str) -> str:
     """Deterministic short ID from text content."""
@@ -39,6 +44,11 @@ def _doc_id(text: str) -> str:
 
 class ChromaKnowledgeBase(KnowledgeBase):
     """Production knowledge base backed by ChromaDB (persistent storage).
+
+    This KB is shared across all tasks/runs and accumulates reusable knowledge.
+    Documents can be marked by scope in metadata:
+    - ``global``: long-term reusable system knowledge (default)
+    - ``task``: task-scoped temporary memory (optional)
 
     Parameters
     ----------
@@ -77,6 +87,8 @@ class ChromaKnowledgeBase(KnowledgeBase):
         doc: dict[str, Any],
         *,
         collection: str = BACKGROUND_MATERIAL,
+        scope: str = KNOWLEDGE_SCOPE_GLOBAL,
+        task_id: str | None = None,
     ) -> None:
         """Store a single document in the specified collection.
 
@@ -92,7 +104,10 @@ class ChromaKnowledgeBase(KnowledgeBase):
             return
 
         doc_id = doc.get("id") or _doc_id(content)
-        metadata = doc.get("metadata", {})
+        metadata = dict(doc.get("metadata", {}))
+        metadata.setdefault(KNOWLEDGE_SCOPE_KEY, scope)
+        if task_id:
+            metadata.setdefault("task_id", task_id)
         metadata.setdefault("stored_at", datetime.now().isoformat())
 
         coll.upsert(
@@ -110,6 +125,8 @@ class ChromaKnowledgeBase(KnowledgeBase):
         *,
         top_k: int = 5,
         collection: str = BACKGROUND_MATERIAL,
+        scope: str | None = KNOWLEDGE_SCOPE_GLOBAL,
+        task_id: str | None = None,
     ) -> list[dict[str, Any]]:
         """Retrieve the most relevant documents for *text*."""
         coll = self._collections.get(collection)
@@ -120,22 +137,34 @@ class ChromaKnowledgeBase(KnowledgeBase):
         if coll.count() == 0:
             return []
 
+        # Fetch extra candidates first, then filter by scope in Python.
+        # This keeps backward compatibility with old docs that may not have
+        # scope metadata.
+        raw_limit = min(max(top_k * 4, top_k), coll.count())
         results = coll.query(
             query_texts=[text],
-            n_results=min(top_k, coll.count()),
+            n_results=raw_limit,
         )
 
         docs: list[dict[str, Any]] = []
         if results and results["documents"]:
             for i, doc_text in enumerate(results["documents"][0]):
                 entry: dict[str, Any] = {"content": doc_text}
+                metadata: dict[str, Any] = {}
                 if results["metadatas"] and results["metadatas"][0]:
-                    entry["metadata"] = results["metadatas"][0][i]
+                    metadata = results["metadatas"][0][i] or {}
+                    entry["metadata"] = metadata
                 if results["distances"] and results["distances"][0]:
                     entry["distance"] = results["distances"][0][i]
                 if results["ids"] and results["ids"][0]:
                     entry["id"] = results["ids"][0][i]
+
+                if not self._match_scope(metadata, scope=scope, task_id=task_id):
+                    continue
+
                 docs.append(entry)
+                if len(docs) >= top_k:
+                    break
         return docs
 
     # ------------------------------------------------------------------
@@ -147,6 +176,8 @@ class ChromaKnowledgeBase(KnowledgeBase):
         docs: list[dict[str, Any]],
         *,
         collection: str = BACKGROUND_MATERIAL,
+        scope: str = KNOWLEDGE_SCOPE_GLOBAL,
+        task_id: str | None = None,
     ) -> int:
         """Batch-upsert multiple documents.  Returns the count stored."""
         coll = self._collections.get(collection)
@@ -162,7 +193,10 @@ class ChromaKnowledgeBase(KnowledgeBase):
             if not content:
                 continue
             doc_id = doc.get("id") or _doc_id(content)
-            metadata = doc.get("metadata", {})
+            metadata = dict(doc.get("metadata", {}))
+            metadata.setdefault(KNOWLEDGE_SCOPE_KEY, scope)
+            if task_id:
+                metadata.setdefault("task_id", task_id)
             metadata.setdefault("stored_at", datetime.now().isoformat())
             ids.append(doc_id)
             texts.append(content)
@@ -181,15 +215,51 @@ class ChromaKnowledgeBase(KnowledgeBase):
         *,
         collections: list[str] | None = None,
         top_k: int = 3,
+        scope: str | None = KNOWLEDGE_SCOPE_GLOBAL,
+        task_id: str | None = None,
     ) -> dict[str, list[dict[str, Any]]]:
         """Query across multiple collections and return results per collection."""
         target = collections or ALL_COLLECTIONS
         results: dict[str, list[dict[str, Any]]] = {}
         for coll_name in target:
             results[coll_name] = await self.query(
-                text, top_k=top_k, collection=coll_name,
+                text,
+                top_k=top_k,
+                collection=coll_name,
+                scope=scope,
+                task_id=task_id,
             )
         return results
+
+    @staticmethod
+    def _match_scope(
+        metadata: dict[str, Any] | None,
+        *,
+        scope: str | None,
+        task_id: str | None,
+    ) -> bool:
+        """Return whether a document metadata matches the requested scope.
+
+        Backward compatibility:
+        - missing ``knowledge_scope`` is treated as ``global``.
+        """
+        if scope is None:
+            return True
+
+        md = metadata or {}
+        doc_scope = md.get(KNOWLEDGE_SCOPE_KEY, KNOWLEDGE_SCOPE_GLOBAL)
+
+        if scope == KNOWLEDGE_SCOPE_GLOBAL:
+            return doc_scope == KNOWLEDGE_SCOPE_GLOBAL
+
+        if scope == KNOWLEDGE_SCOPE_TASK:
+            if doc_scope != KNOWLEDGE_SCOPE_TASK:
+                return False
+            if task_id is None:
+                return True
+            return md.get("task_id") == task_id
+
+        return False
 
     # ------------------------------------------------------------------
     # Domain-specific ingest methods
@@ -219,6 +289,7 @@ class ChromaKnowledgeBase(KnowledgeBase):
                 },
             },
             collection=HISTORY_ARCHIVE,
+            scope=KNOWLEDGE_SCOPE_GLOBAL,
         )
 
         # Store key dialogue lines (skip very short lines)
@@ -239,7 +310,11 @@ class ChromaKnowledgeBase(KnowledgeBase):
                 },
             })
         if docs:
-            await self.store_many(docs, collection=HISTORY_ARCHIVE)
+            await self.store_many(
+                docs,
+                collection=HISTORY_ARCHIVE,
+                scope=KNOWLEDGE_SCOPE_GLOBAL,
+            )
 
         # Store news sources as background material
         if news_sources:
@@ -257,7 +332,11 @@ class ChromaKnowledgeBase(KnowledgeBase):
                         },
                     })
             if bg_docs:
-                await self.store_many(bg_docs, collection=BACKGROUND_MATERIAL)
+                await self.store_many(
+                    bg_docs,
+                    collection=BACKGROUND_MATERIAL,
+                    scope=KNOWLEDGE_SCOPE_GLOBAL,
+                )
 
         logger.info(
             "Ingested episode %s: summary + %d lines + %d news sources",
@@ -285,6 +364,7 @@ class ChromaKnowledgeBase(KnowledgeBase):
                 },
             },
             collection=EXPERT_OPINIONS,
+            scope=KNOWLEDGE_SCOPE_GLOBAL,
         )
 
     async def ingest_fact_check(
@@ -308,6 +388,7 @@ class ChromaKnowledgeBase(KnowledgeBase):
                 },
             },
             collection=FACT_CHECK,
+            scope=KNOWLEDGE_SCOPE_GLOBAL,
         )
 
     async def ingest_background(
@@ -327,6 +408,7 @@ class ChromaKnowledgeBase(KnowledgeBase):
                 },
             },
             collection=BACKGROUND_MATERIAL,
+            scope=KNOWLEDGE_SCOPE_GLOBAL,
         )
 
     # ------------------------------------------------------------------
@@ -338,6 +420,8 @@ class ChromaKnowledgeBase(KnowledgeBase):
         topic: str,
         *,
         top_k_per_collection: int = 3,
+        scope: str | None = KNOWLEDGE_SCOPE_GLOBAL,
+        task_id: str | None = None,
     ) -> str:
         """Build a comprehensive RAG context block for a topic.
 
@@ -345,7 +429,10 @@ class ChromaKnowledgeBase(KnowledgeBase):
         context string suitable for injection into agent prompts.
         """
         all_results = await self.query_multiple_collections(
-            topic, top_k=top_k_per_collection,
+            topic,
+            top_k=top_k_per_collection,
+            scope=scope,
+            task_id=task_id,
         )
 
         sections: list[str] = []
