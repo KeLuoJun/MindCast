@@ -2,7 +2,7 @@
   <div id="app">
     <header class="app-header">
       <router-link to="/" class="logo">
-        <h1>🎙️ MindCast · 智想电波</h1>
+        <h1>🎙️ AI圆桌派</h1>
       </router-link>
       <p class="tagline">多智能体 AI 播客 — 每日 AI 资讯深度解读</p>
     </header>
@@ -10,7 +10,7 @@
       <router-view />
     </main>
     <footer class="app-footer">
-      <p>MindCast MVP &copy; 2026</p>
+      <p>AI圆桌派 MVP &copy; 2026</p>
     </footer>
   </div>
 </template>

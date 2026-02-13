@@ -34,7 +34,7 @@ def build_system_prompt(persona: PersonaConfig, *, is_host: bool = False) -> str
 {persona.stance_bias or '暂无明确立场偏置，保持审慎但有态度'}
 
 【角色定位】
-你是这档AI播客节目"MindCast · 智想电波"的{role}。
+你是这档AI播客节目"AI圆桌派"的{role}。
 这是一期约5分钟的通勤播客，面向对AI感兴趣的中文听众。
 
 【对话核心要求——像真人一样说话】

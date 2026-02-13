@@ -311,7 +311,7 @@ async def get_episode_audio(episode_id: str):
     return FileResponse(
         str(audio_path),
         media_type=media_type,
-        filename=f"mindcast_{episode_id}.{filename_ext}",
+        filename=f"airoundtable_{episode_id}.{filename_ext}",
     )
 
 
