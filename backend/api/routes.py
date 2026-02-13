@@ -76,7 +76,8 @@ async def debug_script_preview(req: ScriptPreviewRequest | None = None):
             collection=BACKGROUND_MATERIAL,
             scope=KNOWLEDGE_SCOPE_GLOBAL,
         )
-        rag_snippets = [d.get("content", "") for d in rag_docs if d.get("content")]
+        rag_snippets = [d.get("content", "")
+                        for d in rag_docs if d.get("content")]
         decision = await orchestrator.host.decide_need_fresh_search(query, rag_snippets)
         need_fresh_search = bool(decision.get("need_fresh_search", False))
         if not rag_snippets:
@@ -86,7 +87,8 @@ async def debug_script_preview(req: ScriptPreviewRequest | None = None):
             focus_query = decision.get("focus", "").strip() or query
             detailed_info.append(await orchestrator._news.search_detail(focus_query))
         else:
-            rag_answer = "\n\n".join(f"- {txt[:300]}" for txt in rag_snippets[:4])
+            rag_answer = "\n\n".join(
+                f"- {txt[:300]}" for txt in rag_snippets[:4])
             detailed_info.append(
                 DetailedInfo(
                     query=query,
@@ -138,7 +140,7 @@ async def debug_script_preview(req: ScriptPreviewRequest | None = None):
     return {
         "topic": plan.topic,
         "summary": plan.summary,
-        "talking_points": plan.talking_points,
+        "talking_points": plan.talking_point_texts(),
         "word_count": word_count,
         "line_count": len(dialogue),
         "news_count": len(news_items),
