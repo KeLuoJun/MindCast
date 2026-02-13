@@ -1,4 +1,4 @@
-# MindCast · 智想电波
+# MindCast
 
 > 多智能体 AI 播客生成器 — 每日 AI 资讯深度解读
 
