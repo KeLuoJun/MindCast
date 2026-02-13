@@ -214,7 +214,8 @@ class PodcastOrchestrator:
                 collection=BACKGROUND_MATERIAL,
                 scope=KNOWLEDGE_SCOPE_GLOBAL,
             )
-            rag_snippets = [d.get("content", "") for d in rag_docs if d.get("content")]
+            rag_snippets = [d.get("content", "")
+                            for d in rag_docs if d.get("content")]
 
             # 2) Let host agent decide whether fresh web search is needed
             decision = await self.host.decide_need_fresh_search(query, rag_snippets)
@@ -227,7 +228,8 @@ class PodcastOrchestrator:
                 info = await self._news.search_detail(focus_query)
                 info_source = "tavily"
             else:
-                rag_answer = "\n\n".join(f"- {txt[:300]}" for txt in rag_snippets[:4])
+                rag_answer = "\n\n".join(
+                    f"- {txt[:300]}" for txt in rag_snippets[:4])
                 info = DetailedInfo(
                     query=query,
                     answer=f"基于知识库历史资料整理：\n{rag_answer}" if rag_answer else "",
@@ -450,11 +452,13 @@ class PodcastOrchestrator:
             )
 
         # --- Opening ---
+        opening_hint = plan.opening_text()
         opening_line = await self.host.generate_line(
             shared_context,
             f"现在是节目开场。请用一种轻松自然的方式带出今天的话题「{plan.topic}」，"
             f"顺便介绍三位嘉宾：{'、'.join(guest_names)}。"
-            f"别搞「欢迎收听」那套，像在和老朋友聊天那样开场。{plan.opening}",
+            f"开场要求：别搞『欢迎收听』模板；可用反直觉事实、尖锐问题或生活化场景做钩子；"
+            f"可轻微表达你的立场或困惑。{opening_hint}",
         )
         _append_line(opening_line)
 
@@ -462,7 +466,10 @@ class PodcastOrchestrator:
         interruption_count = 0
         max_interruptions = 2  # At most 2 interruptions per episode
 
-        for tp_idx, talking_point in enumerate(plan.talking_points):
+        for tp_idx, _ in enumerate(plan.talking_points):
+            talking_point = plan.talking_point_text(tp_idx)
+            depth_hint = plan.talking_point_depth_hint(tp_idx)
+            conflict_setup = plan.talking_point_conflict_setup(tp_idx)
             await self._emit_progress(
                 state,
                 "dialogue",
@@ -474,7 +481,9 @@ class PodcastOrchestrator:
             host_intro = await self.host.generate_line(
                 shared_context,
                 f"引入讨论要点：「{talking_point}」。"
-                f"可以直接向某位嘉宾抛出一个具体问题，或者分享一个让人意外的事实来打开话题。"
+                f"可以向某位嘉宾抛出具体问题，或用意外事实/数据开场，或给一个假设场景让对方判断。"
+                f"追问方向提示：{depth_hint or '围绕因果链条继续追问'}。"
+                f"可能冲突点：{conflict_setup or '不同立场对风险与机会的权重不同'}。"
                 f"不要说'接下来我们来讨论'这种过渡套话。",
             )
             _append_line(host_intro)
@@ -515,9 +524,9 @@ class PodcastOrchestrator:
                     # Interrupter cuts in
                     interrupt_line = await interrupter.generate_line(
                         shared_context,
-                        f"你忍不住打断了{guest_name}的发言！可能是因为你太想反驳、太兴奋"
-                        f"或突然想到了什么。以「不好意思打断一下」「等等等等」「我插一嘴」等"
-                        f"自然的方式切入，然后快速说出你的观点。"
+                        f"你忍不住打断了{guest_name}的发言！可能因为你太想反驳、太兴奋，"
+                        f"或突然想到关键点。请用自然口语切入（如『不好意思打断一下』），"
+                        f"然后在40-80字内快速给出核心观点。"
                         f"关于「{talking_point}」，从你的{interrupter.persona.occupation}角度出发。",
                     )
                     _append_line(interrupt_line)
@@ -551,13 +560,22 @@ class PodcastOrchestrator:
                         f"回应主持人关于「{talking_point}」的讨论。"
                         f"从你{guest.persona.occupation}的真实经验出发分享看法——"
                         f"最好能举一个你亲历或者具体了解的案例。"
+                        f"你的立场倾向是：{guest.persona.stance_bias or '保持审慎但有判断'}。"
                     )
                 else:
                     prev_speaker = speakers_this_round[sp_idx - 1]
+                    prev_guest = guest_map[prev_speaker]
+                    stance_diff_hint = (
+                        "立场差异明显，建议正面交锋"
+                        if (guest.persona.stance_bias or "") != (prev_guest.persona.stance_bias or "")
+                        else "立场可能接近，建议提供新证据或新角度"
+                    )
                     instruction = (
                         f"你听了{prev_speaker}关于「{talking_point}」的观点。"
                         f"你可以接着ta的话往深了聊，也可以提出不同角度甚至反驳。"
                         f"从你{guest.persona.occupation}的视角出发，给出有新增信息量的回应。"
+                        f"你的立场倾向是：{guest.persona.stance_bias or '保持审慎但有判断'}。"
+                        f"与前一位嘉宾的立场差异：{stance_diff_hint}。"
                     )
 
                 guest_line = await guest.generate_line(shared_context, instruction)
@@ -565,10 +583,13 @@ class PodcastOrchestrator:
 
             # Host follow-up / transition
             if tp_idx < len(plan.talking_points) - 1:
+                next_talking_point = plan.talking_point_text(tp_idx + 1)
                 followup = await self.host.generate_line(
                     shared_context,
-                    "对嘉宾刚才的观点做一个简短的、有态度的回应——同意、质疑或补充都行，"
-                    "然后顺畅地把话题带向下一个方向。不要用'接下来'、'让我们转向'这种过渡套话。",
+                    f"对嘉宾刚才的观点做一个简短、有态度的回应。"
+                    f"可以同意并补充、也可以质疑并追问，或点出核心分歧。"
+                    f"然后自然过渡到下一个讨论方向「{next_talking_point}」，"
+                    f"不要用'接下来'、'让我们转向'这类套话。",
                 )
                 _append_line(followup)
 
@@ -585,11 +606,12 @@ class PodcastOrchestrator:
                 break
 
         # --- Closing ---
+        closing_hint = plan.closing_text()
         closing_line = await self.host.generate_line(
             shared_context,
             f"节目收尾。不要做长篇总结，也不要说'让我们拭目以待'之类的套话。"
-            f"分享一个你自己在这次讨论之后的真实感受或者一个新的思考角度，"
-            f"简短感谢嘉宾，留一个开放性的问题给听众。{plan.closing}",
+            f"分享一个你在这次讨论后的真实感受、困惑或态度变化，"
+            f"简短感谢嘉宾，留一个具体开放问题给听众。{closing_hint}",
         )
         _append_line(closing_line)
 
@@ -605,7 +627,7 @@ class PodcastOrchestrator:
         lines = [
             f"【本期播客话题】{plan.topic}",
             f"【摘要】{plan.summary}",
-            "【讨论要点】" + " / ".join(plan.talking_points),
+            "【讨论要点】" + " / ".join(plan.talking_point_texts()),
             "",
             "【深度搜索资料】",
         ]

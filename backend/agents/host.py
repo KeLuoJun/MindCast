@@ -32,6 +32,7 @@ class HostAgent(BaseAgent):
         """Pick the most compelling topic direction from a list of news items.
 
         Returns a dict with keys: ``index``, ``topic``, ``reason``, ``search_queries``.
+        Optional keys: ``conflict_points``, ``angle_hint``.
         """
         news_summary = "\n".join(
             f"{i+1}. 【{item.title}】{item.content[:200]}"
@@ -44,18 +45,32 @@ class HostAgent(BaseAgent):
 
 请你作为播客主持人，从中挑选**1个最具讨论价值的方向**来做今天这期播客。
 
-选择标准——像一个真正的播客主编一样思考：
-1. 话题本身有"张力"——存在争议、悖论、意外转折，而不只是又一个"XX发布了XX"
-2. 能从多个角度切入深度讨论（技术原理、商业逻辑、社会影响、伦理边界等）
-3. 和普通听众的生活有真实关联——通勤路上听了会觉得"哦!原来跟我有关"
-4. 不是炒冷饭——优先选有新信息增量的话题
+【选择标准——像一个真正的播客主编一样思考】
+
+一、话题张力评估
+- 是否存在争议、悖论、意外转折？不要选"XX发布了XX"这种单向信息
+- 能否形成至少两种不同立场的碰撞？
+- 是否有反直觉角度可挖？
+
+二、深度讨论空间
+- 是否支持多角度切入：技术原理、商业逻辑、社会影响、伦理边界、历史脉络
+- 能否形成追问链条：表层现象 → 深层原因 → 外延影响
+
+三、听众关联度
+- 和普通听众生活有真实关联，听完会觉得"原来跟我有关"
+- 能否给出生活化类比，解释复杂概念
+
+四、信息增量
+- 优先有新信息或新解释框架的话题，避免炒冷饭
 
 请以JSON格式返回你的选择（不要包含markdown代码块标记）：
 {{
     "index": 选中的新闻序号,
-    "topic": "提炼的播客话题方向（一句话，要有观点倾向而非纯中性描述）",
-    "reason": "选择理由（用你自己的判断讲2-3句话，不要用套话）",
-    "search_queries": ["后续深度搜索关键词1", "关键词2", "关键词3", "关键词4", "关键词5"]
+    "topic": "提炼的播客话题方向（一句话，要有观点倾向，可以是问题或判断句）",
+    "reason": "选择理由（2-3句话，说明为什么值得聊、碰撞空间在哪）",
+    "conflict_points": ["可能的立场冲突点1", "冲突点2"],
+    "search_queries": ["后续深度搜索关键词1", "关键词2", "关键词3", "关键词4", "关键词5"],
+    "angle_hint": "建议讨论切入角度（如：伦理切入 / 历史对比切入）"
 }}"""
 
         response = await self.think(prompt, temperature=0.7, max_tokens=1024)
@@ -76,7 +91,9 @@ class HostAgent(BaseAgent):
                 "index": 1,
                 "topic": news_list[0].title if news_list else "AI最新动态",
                 "reason": "默认选择首条资讯",
+                "conflict_points": ["技术推进与社会代价之间的冲突"],
                 "search_queries": [news_list[0].title] if news_list else ["AI最新动态"],
+                "angle_hint": "从普通用户受影响最明显的场景切入",
             }
 
     # ------------------------------------------------------------------
@@ -95,13 +112,22 @@ class HostAgent(BaseAgent):
             for info in detailed_info
         )
 
-        prompt = f"""基于以下信息，请为今天的播客策划一期节目大纲。
+        conflict_points = topic.get("conflict_points", [])
+        if isinstance(conflict_points, str):
+            conflict_points = [conflict_points]
 
+        prompt = f"""基于以下信息，请为今天的播客策划一期节目大纲。
 【今日话题】
 {topic.get('topic', '')}
 
 【选题理由】
 {topic.get('reason', '')}
+
+【可能的冲突点】
+{'; '.join(conflict_points)}
+
+【建议切入角度】
+{topic.get('angle_hint', '')}
 
 【深度资料】
 {info_text}
@@ -111,23 +137,31 @@ class HostAgent(BaseAgent):
 
 请以JSON格式返回节目大纲（不要包含markdown代码块标记）：
 {{
-    "topic": "节目主题（带有一定观点色彩的标题，像真实播客节目名）",
-    "summary": "2-3句话播客摘要，写给听众看的——要让人有点击欲望",
-    "opening": "开场白策略（你打算怎么开场来抓住听众注意力——可以是一个反直觉的事实、一个尖锐的问题、或者一个生活化的场景）",
+    "topic": "节目主题（带观点色彩的标题，像真实播客名）",
+    "summary": "2-3句话播客摘要，要有点击欲望，可包含反直觉预告",
+    "opening": {{
+        "hook": "开场钩子（反直觉事实/尖锐问题/生活化场景）",
+        "stance_hint": "主持人在这部分的态度引导"
+    }},
     "talking_points": [
-        "讨论要点1：先抛出一个让人意外的事实或数据来破冰",
-        "讨论要点2：深入技术原理——但要讲成普通人能懂的白话",
-        "讨论要点3：引入一个有争议性的角度，让嘉宾之间产生碰撞",
-        "讨论要点4：回到现实——这件事对普通人意味着什么"
+        {{
+            "point": "讨论要点1：内容说明",
+            "depth_hint": "追问挖掘方向（现象->原因->影响）",
+            "conflict_setup": "冲突引导（如何让嘉宾产生观点碰撞）",
+            "example_needed": "需要穿插的案例或数据"
+        }}
     ],
-    "closing": "收尾方向——留一个开放性的思考题，而不是大而空的展望"
+    "closing": {{
+        "open_question": "留一个具体开放问题",
+        "host_takeaway": "主持人真实感受"
+    }}
 }}
 
 要求：
-- 讨论要点不要写得像论文大纲，要像真人在聊天前"盘"话题的思路
-- 每个要点要包含足够具体的信息，让嘉宾有东西可以聊
-- 要标注出可能产生观点冲突的地方——碰撞越多越好听
-- 控制在4-5个讨论要点，适配5分钟播客"""
+- 讨论要点不要写成论文提纲，要像真人聊天前盘话题
+- 每个要点都要可落地、可追问、可反驳
+- 控制在4-5个讨论要点，适配5分钟播客
+- 整体有推进感：现象 → 原因 → 影响 → 判断"""
 
         response = await self.think(prompt, temperature=0.7, max_tokens=1500)
 
@@ -139,17 +173,79 @@ class HostAgent(BaseAgent):
                 cleaned = cleaned.rsplit("```", 1)[0]
             cleaned = cleaned.strip()
             data = json.loads(cleaned)
-            return EpisodePlan(**data)
+            normalized = self._normalize_episode_plan_payload(data)
+            return EpisodePlan(**normalized)
         except (json.JSONDecodeError, Exception) as exc:
             logger.error(
                 "Failed to parse episode plan: %s | raw: %s", exc, response)
             return EpisodePlan(
                 topic=topic.get("topic", "AI讨论"),
                 summary="关于最新AI话题的深度讨论",
-                talking_points=["技术解读", "行业影响", "伦理思考"],
-                opening="欢迎来到MindCast",
-                closing="感谢收听",
+                talking_points=[
+                    {"point": "现象层：发生了什么", "depth_hint": "关键事实是什么",
+                        "conflict_setup": "乐观与谨慎视角", "example_needed": "最近案例"},
+                    {"point": "原因层：为什么发生", "depth_hint": "底层驱动因素",
+                        "conflict_setup": "技术与商业主因之争", "example_needed": "对比数据"},
+                    {"point": "影响层：对普通人意味着什么", "depth_hint": "短期与长期影响",
+                        "conflict_setup": "效率与公平平衡", "example_needed": "生活化场景"},
+                ],
+                opening={"hook": "一个反直觉开场", "stance_hint": "主持人保持审慎乐观"},
+                closing={"open_question": "这个趋势会把我们带向哪里？",
+                         "host_takeaway": "讨论后更清楚分歧边界"},
             )
+
+    @staticmethod
+    def _normalize_episode_plan_payload(data: dict) -> dict:
+        opening_raw = data.get("opening", "")
+        if isinstance(opening_raw, dict):
+            opening = {
+                "hook": str(opening_raw.get("hook", "")).strip(),
+                "stance_hint": str(opening_raw.get("stance_hint", "")).strip(),
+            }
+        else:
+            opening = str(opening_raw).strip()
+
+        closing_raw = data.get("closing", "")
+        if isinstance(closing_raw, dict):
+            closing = {
+                "open_question": str(closing_raw.get("open_question", "")).strip(),
+                "host_takeaway": str(closing_raw.get("host_takeaway", "")).strip(),
+            }
+        else:
+            closing = str(closing_raw).strip()
+
+        talking_points_raw = data.get("talking_points", [])
+        normalized_points: list[str | dict] = []
+        if isinstance(talking_points_raw, list):
+            for item in talking_points_raw:
+                if isinstance(item, dict):
+                    normalized_points.append(
+                        {
+                            "point": str(item.get("point", "")).strip(),
+                            "depth_hint": str(item.get("depth_hint", "")).strip(),
+                            "conflict_setup": str(item.get("conflict_setup", "")).strip(),
+                            "example_needed": str(item.get("example_needed", "")).strip(),
+                        }
+                    )
+                else:
+                    normalized_points.append(str(item).strip())
+
+        if not normalized_points:
+            normalized_points = ["技术解读", "行业影响", "伦理思考"]
+
+        key_questions = data.get("key_questions", [])
+        if not isinstance(key_questions, list):
+            key_questions = [str(key_questions)] if key_questions else []
+
+        return {
+            "topic": str(data.get("topic", "AI讨论")).strip() or "AI讨论",
+            "summary": str(data.get("summary", "关于最新AI话题的深度讨论")).strip() or "关于最新AI话题的深度讨论",
+            "opening": opening,
+            "talking_points": normalized_points,
+            "key_questions": [str(q).strip() for q in key_questions if str(q).strip()],
+            "unexpected_angle": str(data.get("unexpected_angle", "")).strip(),
+            "closing": closing,
+        }
 
     async def decide_need_fresh_search(
         self,
@@ -205,7 +301,8 @@ class HostAgent(BaseAgent):
                 "focus": str(data.get("focus", "")),
             }
         except Exception:
-            logger.warning("Failed to parse fresh-search decision JSON: %s", response)
+            logger.warning(
+                "Failed to parse fresh-search decision JSON: %s", response)
             return {
                 "need_fresh_search": len(rag_snippets) < 2,
                 "reason": "fallback: rag信息不足时补充搜索",
@@ -226,13 +323,23 @@ class HostAgent(BaseAgent):
 
 请生成你（{self.name}）在这个位置的发言。
 
-要求：
-- 一段自然的口语化发言，50-150字左右
-- 像在朋友聚会上聊天那样自然——可以口语化、可以断句、可以"嗯"一下再继续
-- 不要用"关于这个话题"、"首先我们来看"之类的主持人套话
-- 可以穿插你个人的一个小观察或者一个具体的例子
-- 如果要追问，像真正好奇那样追问，而不是"那么请问您对此怎么看"
-- 按照语音标注规则自然地加入停顿标记 `<#X#>` 和语气词标签
+【发言要求】
+一、基础
+- 一段自然口语化发言，50-150字左右
+- 像朋友聊天：可断句、可犹豫、可小幅情绪起伏
+- 不要用"关于这个话题"、"首先我们来看"这类主持人套话
+
+二、深度引导
+- 追问要往深里挖，不止停留在表面态度
+- 可挑战假设："如果前提变了，结论还成立吗？"
+- 可总结分歧："你们核心分歧其实在X"
+
+三、立场表达
+- 可以穿插你个人观察或具体例子
+- 可以表达倾向或困惑，不要假装中立
+
+四、语音标注
+- 自然加入 `<#X#>` 停顿和语气词标签
 
 严禁出现：三段式总结、"值得关注"、"让我们拭目以待"、"不可忽视"、否定式排比
 
@@ -240,7 +347,8 @@ class HostAgent(BaseAgent):
 {{
     "text": "用于展示的纯净文本（不含标注）",
     "ssml_text": "带语音标注的文本（含 <#X#> 停顿和情感语气词）",
-    "emotion": "当前情感状态（如 happy, neutral, excited, thoughtful）"
+    "emotion": "当前情感状态（如 happy, neutral, excited, thoughtful, skeptical, curious）",
+    "intent": "发言意图（如 question, challenge, summarize, transition）"
 }}"""
 
         response = await self.think(prompt, conversation_history=context, temperature=0.85, max_tokens=800)

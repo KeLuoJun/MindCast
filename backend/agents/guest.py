@@ -42,14 +42,29 @@ class GuestAgent(BaseAgent):
 
 请生成你（{self.name}，{self.persona.mbti}，{self.persona.occupation}）在这个位置的发言。
 
-要求：
-- 一段自然的口语化发言，50-200字左右
+【发言要求】
+一、专业人格表达
+- 一段自然口语化发言，50-200字左右
 - 体现你{self.persona.mbti}的性格内核和{self.persona.occupation}的独特视角
-- 像在朋友聚会上分享自己真实想法那样说话：可以犹豫、可以激动、可以吐槽
-- 给出有深度的洞见——不是泛泛而谈，而是基于你的专业经验和个人判断
-- 遇到复杂概念用类比拆解："这就好比……"；引用你经历过的具体案例
-- 可以大胆反驳前面的观点——"我倒不这么看"、"这里面有个问题被忽略了"
-- 按照语音标注规则自然地加入停顿标记 `<#X#>` 和语气词标签
+- 带有你的立场倾向：{self.persona.stance_bias or '保持审慎但有判断'}
+
+二、深度洞见
+- 不是泛泛而谈，要基于专业经验和个人判断
+- 不只说"是什么"，尽量补充"为什么"和"意味着什么"
+- 尝试给一个反直觉角度："大家都关注A，但真正关键是B"
+
+三、增量信息
+- 尽量给具体案例、数据或一手观察
+- 前面说得充分时，换角度补充，不要重复
+
+四、观点碰撞
+- 可以大胆反驳前面观点——"我倒不这么看"、"这里有个前提被忽略了"
+- 若被说服，可明确承认观点修正
+
+五、表达方式
+- 复杂概念用类比拆解："这就好比……"
+- 像朋友聊天，可犹豫、可激动、可吐槽
+- 自然加入 `<#X#>` 停顿和语气词标签
 
 严禁出现：
 - "非常好的问题"、"正如你所说"之类的谄媚语
@@ -62,7 +77,8 @@ class GuestAgent(BaseAgent):
 {{
     "text": "用于展示的纯净文本（不含标注）",
     "ssml_text": "带语音标注的文本（含 <#X#> 停顿和情感语气词）",
-    "emotion": "当前情感状态（如 happy, neutral, excited, thoughtful, skeptical）"
+    "emotion": "当前情感状态（如 happy, neutral, excited, thoughtful, skeptical, confident）",
+    "stance": "当前立场表达（如 agreement, disagreement, extension, correction）"
 }}"""
 
         response = await self.think(prompt, conversation_history=context, temperature=0.85, max_tokens=800)
