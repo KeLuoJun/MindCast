@@ -20,6 +20,7 @@ from backend.api.schemas import (
     TaskCreatedResponse,
 )
 from backend.config import settings
+from backend.knowledge import get_knowledge_base
 from backend.models import DetailedInfo, Episode
 from backend.services.run_logger import EpisodeRunLogger
 from backend.services.news_service import get_news_service
@@ -78,6 +79,15 @@ async def debug_script_preview(req: ScriptPreviewRequest | None = None):
         summary=plan.summary,
         guests=[guest.persona.name for guest in orchestrator.guests],
     )
+    # Retrieve RAG context
+    rag_context = ""
+    try:
+        kb = get_knowledge_base()
+        rag_context = await kb.build_rag_context(plan.topic, top_k_per_collection=3)
+    except Exception:
+        logger.warning(
+            "RAG retrieval failed in debug endpoint, continuing without")
+
     output_dir = settings.ensure_output_dir()
     run_logger = EpisodeRunLogger(
         output_dir / "logs" / f"{episode.id}.debug.jsonl")
@@ -88,6 +98,7 @@ async def debug_script_preview(req: ScriptPreviewRequest | None = None):
             "episode": episode,
             "progress": None,
             "run_logger": run_logger,
+            "rag_context": rag_context,
         },
     )
     word_count = sum(len(line.text) for line in dialogue)
@@ -272,3 +283,61 @@ async def get_episode_audio(episode_id: str):
         media_type=media_type,
         filename=f"mindcast_{episode_id}.{filename_ext}",
     )
+
+
+# ---------------------------------------------------------------------------
+# Knowledge base management endpoints
+# ---------------------------------------------------------------------------
+
+@router.get("/knowledge/stats")
+async def knowledge_stats():
+    """Return document counts for each knowledge base collection."""
+    try:
+        kb = get_knowledge_base()
+        stats = kb.get_collection_stats()
+        return {"status": "ok", "collections": stats}
+    except Exception as exc:
+        logger.error("KB stats error: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.post("/knowledge/query")
+async def knowledge_query(
+    text: str,
+    collection: str = "background_material",
+    top_k: int = 5,
+):
+    """Query the knowledge base for relevant documents."""
+    try:
+        kb = get_knowledge_base()
+        results = await kb.query(text, top_k=top_k, collection=collection)
+        return {"query": text, "collection": collection, "results": results}
+    except Exception as exc:
+        logger.error("KB query error: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.post("/knowledge/ingest-episode/{episode_id}")
+async def ingest_episode_to_kb(episode_id: str):
+    """Manually ingest an existing episode into the knowledge base."""
+    json_path = settings.output_dir / f"{episode_id}.json"
+    if not json_path.exists():
+        raise HTTPException(status_code=404, detail="Episode not found")
+
+    ep = Episode.load_json(json_path)
+    try:
+        kb = get_knowledge_base()
+        await kb.ingest_episode(
+            episode_id=ep.id,
+            topic=ep.topic,
+            summary=ep.summary,
+            dialogue_lines=[
+                {"speaker": d.speaker, "text": d.text}
+                for d in ep.dialogue
+            ],
+            news_sources=[s.model_dump() for s in ep.news_sources],
+        )
+        return {"status": "ok", "episode_id": ep.id, "message": "Episode ingested"}
+    except Exception as exc:
+        logger.error("KB ingest error: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
