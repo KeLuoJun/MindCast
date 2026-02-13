@@ -19,10 +19,13 @@ class TTSService:
         api_key: str | None = None,
         model: str | None = None,
         base_url: str | None = None,
+        audio_format: str | None = None,
     ) -> None:
         self.api_key = api_key or settings.minimax_api_key
         self.model = model or settings.minimax_tts_model
         self.base_url = base_url or settings.minimax_tts_base_url
+        self.audio_format = (
+            audio_format or settings.minimax_audio_format).lower()
 
     async def synthesize(
         self,
@@ -57,7 +60,12 @@ class TTSService:
             "pitch": pitch,
         }
         if emotion and emotion != "neutral":
-            voice_setting["emotion"] = emotion
+            logger.debug(
+                "Emotion '%s' requested for voice=%s, but MiniMax speech-2.8-hd "
+                "does not accept voice_setting.emotion in this endpoint; ignoring.",
+                emotion,
+                voice_id,
+            )
 
         payload = {
             "model": self.model,
@@ -67,7 +75,7 @@ class TTSService:
             "audio_setting": {
                 "sample_rate": sample_rate,
                 "bitrate": bitrate,
-                "format": "mp3",
+                "format": self.audio_format,
                 "channel": 1,
             },
             "language_boost": "Chinese",

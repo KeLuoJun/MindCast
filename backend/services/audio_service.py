@@ -26,9 +26,9 @@ class AudioService:
         Parameters
         ----------
         audio_segments:
-            List of ``(mp3_bytes, pause_after_seconds)`` tuples.
+            List of ``(audio_bytes, pause_after_seconds)`` tuples.
         output_path:
-            Destination file path for the final MP3.
+            Destination file path for the final audio.
         target_dbfs:
             Target loudness for volume normalization.
 
@@ -39,12 +39,17 @@ class AudioService:
         """
         combined = AudioSegment.silent(duration=0)
 
-        for idx, (mp3_bytes, pause_after) in enumerate(audio_segments):
-            if not mp3_bytes:
+        for idx, (audio_bytes, pause_after) in enumerate(audio_segments):
+            if not audio_bytes:
                 logger.warning("Segment %d has empty audio, skipping.", idx)
                 continue
             try:
-                segment = AudioSegment.from_mp3(io.BytesIO(mp3_bytes))
+                audio_stream = io.BytesIO(audio_bytes)
+                try:
+                    segment = AudioSegment.from_wav(audio_stream)
+                except Exception:
+                    audio_stream.seek(0)
+                    segment = AudioSegment.from_mp3(audio_stream)
 
                 # Volume normalization
                 if segment.dBFS != float("-inf"):
@@ -68,8 +73,12 @@ class AudioService:
         # Ensure output directory exists
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
 
-        # Export final MP3
-        combined.export(output_path, format="mp3", bitrate="128k")
+        output_ext = Path(output_path).suffix.lower()
+        export_format = "wav" if output_ext == ".wav" else "mp3"
+        if export_format == "wav":
+            combined.export(output_path, format="wav")
+        else:
+            combined.export(output_path, format="mp3", bitrate="128k")
         duration_seconds = len(combined) / 1000.0
         logger.info(
             "Exported episode: %s (%.1f seconds)", output_path, duration_seconds
