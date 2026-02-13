@@ -34,6 +34,9 @@ class Settings(BaseSettings):
     target_word_count_max: int = 2000
     output_dir: Path = Path("output/episodes")
 
+    # --- Knowledge base (ChromaDB) ---
+    chromadb_persist_dir: Path = Path("data/chromadb")
+
     # --- Server ---
     host: str = "0.0.0.0"
     port: int = 8000

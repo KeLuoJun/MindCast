@@ -26,3 +26,14 @@ frontend/dist/
 .vscode/
 *.swp
 *.swo
+
+data/chromadb
+output/episodes/logs/
+*.log
+__pycache__/
+.venv/
+.env
+.vscode/
+output/episodes/*.json
+output/episodes/*.wav
+output/episodes/*.mp3

@@ -9,11 +9,9 @@ from fastapi.staticfiles import StaticFiles
 
 from backend.api.routes import router
 from backend.config import settings
+from backend.logging_config import setup_logging
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-)
+setup_logging(level=logging.INFO)
 
 app = FastAPI(
     title="MindCast API",
