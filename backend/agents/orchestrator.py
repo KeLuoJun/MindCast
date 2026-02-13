@@ -43,6 +43,7 @@ class OrchestratorState(TypedDict, total=False):
     progress: ProgressCallback
     run_logger: EpisodeRunLogger
     rag_context: str
+    active_guests: list[GuestAgent]  # Guests for this specific run
 
 
 class PodcastOrchestrator:
@@ -61,7 +62,8 @@ class PodcastOrchestrator:
         self._audio = audio or audio_service
 
         self.host = HostAgent(self._llm)
-        self.guests = [GuestAgent(p, self._llm) for p in GUEST_PERSONAS]
+        # We'll select guest instances per episode run to control guest count
+        self._guest_pool = {p.name: GuestAgent(p, self._llm) for p in GUEST_PERSONAS}
         self._app = self._build_graph().compile()
 
     def _build_graph(self) -> StateGraph:
@@ -91,7 +93,12 @@ class PodcastOrchestrator:
 
     async def generate_episode(self, progress: ProgressCallback = None) -> Episode:
         """Run the complete podcast generation pipeline via LangGraph."""
-        episode = Episode(guests=[g.persona.name for g in self.guests])
+        # 1. Select 1-2 guests randomly from the pool
+        num_guests = random.randint(1, 2)
+        selected_names = random.sample(list(self._guest_pool.keys()), num_guests)
+        active_guests = [self._guest_pool[name] for name in selected_names]
+
+        episode = Episode(guests=selected_names)
         output_dir = settings.ensure_output_dir()
         run_log = EpisodeRunLogger(output_dir / "logs" / f"{episode.id}.jsonl")
         episode.generation_log_path = str(run_log.log_path)
@@ -117,6 +124,7 @@ class PodcastOrchestrator:
                     "progress": progress,
                     "run_logger": run_log,
                     "rag_context": "",
+                    "active_guests": active_guests,
                 }
             )
             result_episode = final_state["episode"]
@@ -139,7 +147,7 @@ class PodcastOrchestrator:
             raise
         finally:
             self.host.reset_history()
-            for g in self.guests:
+            for g in active_guests:
                 g.reset_history()
             # Remove per-episode file handler
             logging.getLogger().removeHandler(ep_handler)
@@ -291,9 +299,10 @@ class PodcastOrchestrator:
         episode = state["episode"]
         topic = state["topic"]
         detailed_info = state.get("detailed_info", [])
+        active_guests = state.get("active_guests", [])
 
         await self._emit_progress(state, "planning", "主持人正在策划节目大纲…")
-        guest_names = [g.persona.name for g in self.guests]
+        guest_names = [g.persona.name for g in active_guests]
         plan = await self.host.plan_episode(
             topic,
             [info.model_dump() for info in detailed_info],
@@ -436,8 +445,9 @@ class PodcastOrchestrator:
         bg_info = self._build_background_info(plan, detailed_info, rag_context)
         shared_context.append({"role": "system", "content": bg_info})
 
-        guest_map = {g.persona.name: g for g in self.guests}
-        guest_names = [g.persona.name for g in self.guests]
+        active_guests = state.get("active_guests", [])
+        guest_map = {g.persona.name: g for g in active_guests}
+        guest_names = [g.persona.name for g in active_guests]
 
         # Helper to append a line and log it
         def _append_line(line: DialogueLine) -> None:
@@ -452,12 +462,24 @@ class PodcastOrchestrator:
             )
 
         # --- Opening ---
+        # Add the fixed show opening
+        fixed_opening_text = "各位好，欢迎来到——『AI圆桌派』。在这里，我们撇开那些干巴巴的代码，只聊聊这股席卷全球的AI浪潮里，最真诚的人性与分歧。"
+        _append_line(
+            DialogueLine(
+                speaker=self.host.name,
+                text=fixed_opening_text,
+                ssml_text=f"{fixed_opening_text}<#1000#>",  # Add a pause
+                emotion="happy",
+                voice_id=self.host.persona.voice_id
+            )
+        )
+
         opening_hint = plan.opening_text()
         opening_line = await self.host.generate_line(
             shared_context,
-            f"现在是节目开场。请用一种轻松自然的方式带出今天的话题「{plan.topic}」，"
+            f"现在是节目开场。请紧接刚才的开场白，用一种轻松自然的方式带出今天的话题「{plan.topic}」，"
             f"顺便介绍三位嘉宾：{'、'.join(guest_names)}。"
-            f"开场要求：别搞『欢迎收听』模板；可用反直觉事实、尖锐问题或生活化场景做钩子；"
+            f"开场要求：紧接『AI圆桌派』的基调；别搞『欢迎收听』模板；可用反直觉事实、尖锐问题或生活化场景做钩子；"
             f"可轻微表达你的立场或困惑。{opening_hint}",
         )
         _append_line(opening_line)

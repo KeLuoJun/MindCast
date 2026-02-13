@@ -76,8 +76,11 @@ class TextPipelineRunner:
         self._llm = get_llm_service()
         self._news = get_news_service()
         self.host = HostAgent(self._llm)
+        # Select 1-2 guests randomly from the pool
+        num_guests = random.randint(1, 2)
+        selected_personas = random.sample(GUEST_PERSONAS, num_guests)
         self.guests = [GuestAgent(persona, self._llm)
-                       for persona in GUEST_PERSONAS]
+                       for persona in selected_personas]
 
     async def generate_dialogue(
         self,
