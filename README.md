@@ -8,7 +8,8 @@ MindCast 是一个多智能体系统，每日自动从 Tavily 获取最新 AI �
 
 - **后端**：FastAPI + OpenAI-compatible LLM + Tavily + MiniMax TTS
 - **前端**：Vue 3 + Vite
-- **Agent 系统**：基于 OpenAI SDK 封装，无额外框架依赖
+- **Agent 系统**：基于 LangGraph 的状态图编排（news → topic → research → planning → dialogue → tts → audio）
+- **可观测性**：每次生成会落地完整结构化日志到 `output/episodes/logs/{episode_id}.jsonl`
 
 ## 角色
 
@@ -46,6 +47,14 @@ python main.py
 ```bash
 cd frontend
 npm install
+npm run dev
+```
+
+如需自定义后端地址（例如远程后端），可在启动前设置：
+
+```bash
+# Windows PowerShell
+$env:VITE_API_TARGET="http://127.0.0.1:8000"
 npm run dev
 ```
 
