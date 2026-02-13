@@ -91,6 +91,7 @@ class Episode(BaseModel):
     dialogue: list[DialogueLine] = Field(default_factory=list)
     news_sources: list[NewsItem] = Field(default_factory=list)
     audio_path: str | None = None
+    generation_log_path: str | None = None
     duration_seconds: float | None = None
     word_count: int = 0
 

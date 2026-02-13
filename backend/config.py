@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     minimax_api_key: str = ""
     minimax_tts_model: str = "speech-2.8-hd"
     minimax_tts_base_url: str = "https://api.minimaxi.com/v1/t2a_v2"
+    minimax_audio_format: str = "wav"
 
     # --- Podcast parameters ---
     max_guests: int = 3
