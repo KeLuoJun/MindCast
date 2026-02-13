@@ -16,16 +16,104 @@ from backend.api.schemas import (
     EpisodeDetail,
     EpisodeSummary,
     GenerateRequest,
+    ScriptPreviewRequest,
     TaskCreatedResponse,
 )
 from backend.config import settings
-from backend.models import Episode
+from backend.models import DetailedInfo, Episode
+from backend.services.run_logger import EpisodeRunLogger
+from backend.services.news_service import get_news_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api")
 
 # In-memory task tracking (MVP — no persistent task store)
 _tasks: dict[str, dict] = {}
+
+
+# ---------------------------------------------------------------------------
+# Debug endpoints — stage-by-stage backend verification
+# ---------------------------------------------------------------------------
+
+@router.get("/debug/news")
+async def debug_news(max_results: int = 5):
+    """Fetch daily news only (without topic/script/audio generation)."""
+    service = get_news_service()
+    items = await service.get_daily_ai_news(max_results=max_results)
+    return {
+        "count": len(items),
+        "items": [item.model_dump() for item in items],
+    }
+
+
+@router.post("/debug/script")
+async def debug_script_preview(req: ScriptPreviewRequest | None = None):
+    """Run pipeline until dialogue generation (skip TTS and audio stitching)."""
+    payload = req or ScriptPreviewRequest()
+    orchestrator = PodcastOrchestrator()
+
+    news_items = await orchestrator._news.get_daily_ai_news(
+        max_results=payload.max_news_results
+    )
+    if not news_items:
+        raise HTTPException(status_code=502, detail="No news items retrieved")
+
+    topic = await orchestrator.host.select_topic(news_items)
+    search_queries = topic.get("search_queries", [])[
+        : payload.max_search_queries]
+
+    detailed_info: list[DetailedInfo] = []
+    for query in search_queries:
+        detailed_info.append(await orchestrator._news.search_detail(query))
+
+    plan = await orchestrator.host.plan_episode(
+        topic,
+        [info.model_dump() for info in detailed_info],
+        [guest.persona.name for guest in orchestrator.guests],
+    )
+
+    episode = Episode(
+        topic=plan.topic,
+        title=plan.topic,
+        summary=plan.summary,
+        guests=[guest.persona.name for guest in orchestrator.guests],
+    )
+    output_dir = settings.ensure_output_dir()
+    run_logger = EpisodeRunLogger(
+        output_dir / "logs" / f"{episode.id}.debug.jsonl")
+    dialogue = await orchestrator._generate_dialogue(
+        plan,
+        detailed_info,
+        {
+            "episode": episode,
+            "progress": None,
+            "run_logger": run_logger,
+        },
+    )
+    word_count = sum(len(line.text) for line in dialogue)
+
+    orchestrator.host.reset_history()
+    for guest in orchestrator.guests:
+        guest.reset_history()
+
+    return {
+        "topic": plan.topic,
+        "summary": plan.summary,
+        "talking_points": plan.talking_points,
+        "word_count": word_count,
+        "line_count": len(dialogue),
+        "news_count": len(news_items),
+        "search_queries": search_queries,
+        "generation_log_path": str(run_logger.log_path),
+        "dialogue": [
+            {
+                "speaker": line.speaker,
+                "text": line.text,
+                "emotion": line.emotion,
+            }
+            for line in dialogue
+        ],
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -174,8 +262,13 @@ async def get_episode_audio(episode_id: str):
     if not ep.audio_path or not Path(ep.audio_path).exists():
         raise HTTPException(status_code=404, detail="Audio not available")
 
+    audio_path = Path(ep.audio_path)
+    suffix = audio_path.suffix.lower()
+    media_type = "audio/wav" if suffix == ".wav" else "audio/mpeg"
+    filename_ext = "wav" if suffix == ".wav" else "mp3"
+
     return FileResponse(
-        ep.audio_path,
-        media_type="audio/mpeg",
-        filename=f"mindcast_{episode_id}.mp3",
+        str(audio_path),
+        media_type=media_type,
+        filename=f"mindcast_{episode_id}.{filename_ext}",
     )

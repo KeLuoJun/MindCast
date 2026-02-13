@@ -15,6 +15,12 @@ class GenerateRequest(BaseModel):
     pass
 
 
+class ScriptPreviewRequest(BaseModel):
+    """Request body for previewing script generation without TTS/audio."""
+    max_news_results: int = Field(default=6, ge=3, le=10)
+    max_search_queries: int = Field(default=3, ge=1, le=5)
+
+
 # ---------------------------------------------------------------------------
 # Responses
 # ---------------------------------------------------------------------------
