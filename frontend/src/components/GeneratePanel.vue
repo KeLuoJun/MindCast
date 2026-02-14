@@ -1,83 +1,149 @@
 <template>
   <div class="generate-panel" v-if="taskId">
     <div class="studio-container">
-      <!-- Studio Header -->
+      <!-- Header -->
       <div class="studio-header">
-        <h3>AI圆桌派录音棚</h3>
-        <p class="live-indicator">
+        <div class="studio-badge">
           <span class="live-dot"></span>
-          <span>{{ currentStageLabel || '准备中' }}</span>
-        </p>
+          录音棚
+        </div>
+        <h3>AI圆桌派录音棚</h3>
+        <p class="stage-name">{{ currentStageLabel }}</p>
       </div>
 
-      <!-- Virtual Podcast Room -->
-      <div class="podcast-room">
+      <!-- Studio Scene -->
+      <div class="studio-scene">
+        <div class="scene-bg">
+          <div class="bg-gradient"></div>
+          <div class="bg-grid"></div>
+        </div>
+        
+        <!-- Podium/Table -->
+        <div class="podium">
+          <div class="podium-surface">
+            <div class="podium-logo">
+              <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14.5H8v-5l3.5-3.5V16.5zm5 0h-3v-8.5l3.5 3.5v5z"/>
+              </svg>
+            </div>
+          </div>
+          <div class="podium-base"></div>
+        </div>
+
         <!-- Host -->
-        <div class="participant host" :class="getSpeakingClass('host')">
-          <div class="avatar">
-            <svg viewBox="0 0 24 24" width="40" height="40" fill="currentColor">
-              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/>
-            </svg>
+        <div class="person host" :class="{ speaking: isSpeaking('host') }">
+          <div class="mic"></div>
+          <div class="avatar host-avatar">
+            <span class="avatar-emoji">🎙️</span>
           </div>
-          <div class="participant-info">
+          <div class="person-info">
             <span class="name">主持人</span>
-            <div class="speaking-wave" :class="{ active: isSpeaking('host') }"></div>
+            <span class="role">林晨曦</span>
+          </div>
+          <div class="sound-bar" :class="{ active: isSpeaking('host') }">
+            <span></span><span></span><span></span>
           </div>
         </div>
 
-        <!-- Guests -->
-        <div class="guests-container">
-          <div class="participant guest-a" :class="getSpeakingClass('guest-a')">
-            <div class="avatar">
-              <svg viewBox="0 0 24 24" width="36" height="36" fill="currentColor">
-                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/>
-              </svg>
-            </div>
-            <div class="participant-info">
-              <span class="name">技术专家</span>
-              <div class="speaking-wave" :class="{ active: isSpeaking('guest-a') }"></div>
-            </div>
+        <!-- Guest 1 -->
+        <div class="person guest-1" :class="{ speaking: isSpeaking('guest-a') }">
+          <div class="mic"></div>
+          <div class="avatar guest-1-avatar">
+            <span class="avatar-emoji">💻</span>
           </div>
-
-          <div class="participant guest-b" :class="getSpeakingClass('guest-b')">
-            <div class="avatar">
-              <svg viewBox="0 0 24 24" width="36" height="36" fill="currentColor">
-                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.ari 3.22-6 3.22z"/>
-              </svg>
-            </div>
-            <div class="participant-info">
-              <span class="name">产品经理</span>
-              <div class="speaking-wave" :class="{ active: isSpeaking('guest-b') }"></div>
-            </div>
+          <div class="person-info">
+            <span class="name">技术专家</span>
+            <span class="role">赵明远</span>
+          </div>
+          <div class="sound-bar" :class="{ active: isSpeaking('guest-a') }">
+            <span></span><span></span><span></span>
           </div>
         </div>
 
-        <!-- Mic Stand -->
-        <div class="mic-stand">
-          <div class="mic-head"></div>
-          <div class="mic-pole"></div>
-          <div class="mic-base"></div>
+        <!-- Guest 2 -->
+        <div class="person guest-2" :class="{ speaking: isSpeaking('guest-b') }">
+          <div class="mic"></div>
+          <div class="avatar guest-2-avatar">
+            <span class="avatar-emoji">🚀</span>
+          </div>
+          <div class="person-info">
+            <span class="name">创业者</span>
+            <span class="role">苏婉清</span>
+          </div>
+          <div class="sound-bar" :class="{ active: isSpeaking('guest-b') }">
+            <span></span><span></span><span></span>
+          </div>
+        </div>
+
+        <!-- Guest 3 -->
+        <div class="person guest-3" :class="{ speaking: isSpeaking('guest-c') }">
+          <div class="mic"></div>
+          <div class="avatar guest-3-avatar">
+            <span class="avatar-emoji">📚</span>
+          </div>
+          <div class="person-info">
+            <span class="name">伦理学家</span>
+            <span class="role">陈志恒</span>
+          </div>
+          <div class="sound-bar" :class="{ active: isSpeaking('guest-c') }">
+            <span></span><span></span><span></span>
+          </div>
+        </div>
+
+        <!-- Wave Animation -->
+        <div class="wave-container">
+          <div class="wave"></div>
+          <div class="wave"></div>
+          <div class="wave"></div>
         </div>
       </div>
 
-      <!-- Stage Progress -->
-      <div class="stages">
+      <!-- Progress -->
+      <div class="progress-bar">
         <div
-          v-for="stage in stages"
+          v-for="(stage, idx) in stages"
           :key="stage.key"
-          class="stage-item"
+          class="progress-step"
           :class="getStageClass(stage.key)"
         >
-          <span class="stage-icon">{{ getStageIcon(stage.key) }}</span>
-          <span class="stage-label">{{ stage.label }}</span>
+          <div class="step-dot">
+            <svg v-if="getStageClass(stage.key) === 'completed'" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="3">
+              <polyline points="20,6 9,17 4,12"/>
+            </svg>
+          </div>
+          <span class="step-label">{{ stage.label }}</span>
+          <div v-if="idx < stages.length - 1" class="step-line" :class="{ filled: getStageClass(stage.key) === 'completed' }"></div>
         </div>
       </div>
 
-      <!-- Current Detail -->
-      <div class="detail-container">
-        <p class="detail-text">{{ detail }}</p>
+      <!-- Status -->
+      <div class="status-box">
+        <div class="status-icon">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="12" y1="16" x2="12" y2="12"/>
+            <line x1="12" y1="8" x2="12.01" y2="8"/>
+          </svg>
+        </div>
+        <p class="status-text">{{ detail || '等待执行...' }}</p>
         <p v-if="error" class="error-text">{{ error }}</p>
       </div>
+
+      <!-- Completion -->
+      <transition name="fade">
+        <div v-if="isCompleted" class="complete-overlay">
+          <div class="complete-box">
+            <div class="complete-icon">
+              <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <polyline points="16,8 10,14 8,12"/>
+              </svg>
+            </div>
+            <h4>生成完成！</h4>
+            <p>即将跳转...</p>
+          </div>
+        </div>
+      </transition>
     </div>
   </div>
 </template>
@@ -102,6 +168,7 @@ const currentStage = ref('')
 const detail = ref('')
 const error = ref('')
 const currentSpeaker = ref('')
+const isCompleted = ref(false)
 let eventSource = null
 let speakerInterval = null
 
@@ -119,34 +186,21 @@ function getStageClass(key) {
   return 'pending'
 }
 
-function getStageIcon(key) {
-  const cls = getStageClass(key)
-  if (cls === 'completed') return '✓'
-  if (cls === 'active') return '○'
-  return '·'
-}
-
-function getSpeakingClass(participant) {
-  return currentSpeaker.value === participant ? 'speaking' : ''
-}
-
 function isSpeaking(participant) {
   return currentSpeaker.value === participant
 }
 
 function simulateSpeaking() {
-  const speakers = ['host', 'guest-a', 'guest-b', '']
+  const speakers = ['host', 'guest-a', 'guest-b', 'guest-c']
   let idx = 0
-
   speakerInterval = setInterval(() => {
-    // Only simulate speaking during dialogue and audio stages
     if (currentStage.value === 'dialogue' || currentStage.value === 'audio') {
       currentSpeaker.value = speakers[idx % speakers.length]
       idx++
     } else {
       currentSpeaker.value = ''
     }
-  }, 3000)
+  }, 2500)
 }
 
 onMounted(() => {
@@ -157,9 +211,10 @@ onMounted(() => {
       currentStage.value = data.stage || ''
       detail.value = data.detail || ''
       if (data.status === 'completed') {
+        isCompleted.value = true
         eventSource.close()
         clearInterval(speakerInterval)
-        setTimeout(() => emit('completed'), 1500)
+        setTimeout(() => emit('completed'), 2500)
       }
       if (data.status === 'failed') {
         error.value = data.detail
@@ -168,14 +223,13 @@ onMounted(() => {
         setTimeout(() => emit('completed'), 3000)
       }
     } catch (e) {
-      console.error('Failed to parse SSE:', e)
+      console.error('SSE parse error:', e)
     }
   }
   eventSource.onerror = () => {
     error.value = '连接中断'
     eventSource.close()
   }
-
   simulateSpeaking()
 })
 
@@ -187,291 +241,487 @@ onUnmounted(() => {
 
 <style scoped>
 .generate-panel {
-  margin-bottom: 2rem;
+  margin-top: 1rem;
 }
 
 .studio-container {
+  position: relative;
   background: white;
-  border-radius: 24px;
-  padding: 2rem;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
+  border-radius: var(--radius-xl);
+  padding: 1.75rem;
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
 }
 
+/* Header */
 .studio-header {
   text-align: center;
-  margin-bottom: 2rem;
+  margin-bottom: 1.5rem;
+}
+
+.studio-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  padding: 5px 12px;
+  border-radius: var(--radius-full);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #ef4444;
+  margin-bottom: 0.75rem;
+}
+
+.studio-badge .live-dot {
+  width: 6px;
+  height: 6px;
+  background: #ef4444;
+  border-radius: 50%;
+  animation: livePulse 1.5s infinite;
+}
+
+@keyframes livePulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(0.8); }
 }
 
 .studio-header h3 {
-  font-size: 1.6rem;
+  font-size: 1.25rem;
   font-weight: 700;
-  margin-bottom: 0.5rem;
-  background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: var(--color-text);
+  margin-bottom: 0.25rem;
 }
 
-.live-indicator {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
+.stage-name {
+  color: var(--color-text-secondary);
   font-size: 0.9rem;
-  color: #6b7280;
 }
 
-.live-dot {
-  width: 8px;
-  height: 8px;
-  background: #ef4444;
-  border-radius: 50%;
-  animation: pulse 1.5s ease-in-out infinite;
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.5; transform: scale(0.8); }
-}
-
-.podcast-room {
+/* Studio Scene */
+.studio-scene {
   position: relative;
-  background: linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%);
-  border-radius: 20px;
-  padding: 2rem;
-  min-height: 240px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 2rem;
+  background: linear-gradient(180deg, #f8f9fc 0%, #eef0f5 100%);
+  border-radius: var(--radius-lg);
+  padding: 2rem 1.5rem;
+  min-height: 220px;
+  margin-bottom: 1.5rem;
+  overflow: hidden;
 }
 
-.podcast-room::before {
-  content: '';
+.scene-bg {
   position: absolute;
-  top: 0;
+  inset: 0;
+}
+
+.bg-gradient {
+  position: absolute;
+  top: -50%;
+  left: -20%;
+  width: 60%;
+  height: 100%;
+  background: radial-gradient(ellipse, rgba(99, 102, 241, 0.1) 0%, transparent 70%);
+}
+
+.bg-grid {
+  position: absolute;
+  inset: 0;
+  background-image: 
+    linear-gradient(rgba(99, 102, 241, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(99, 102, 241, 0.05) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+/* Podium */
+.podium {
+  position: absolute;
+  bottom: 20px;
   left: 50%;
   transform: translateX(-50%);
-  width: 80%;
-  height: 100%;
-  background: radial-gradient(ellipse at center, rgba(99, 102, 241, 0.1) 0%, transparent 70%);
-}
-
-.participant {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.5rem;
+}
+
+.podium-surface {
+  width: 100px;
+  height: 16px;
+  background: linear-gradient(180deg, #e2e8f0 0%, #cbd5e1 100%);
+  border-radius: 8px 8px 0 0;
+}
+
+.podium-logo {
+  width: 32px;
+  height: 32px;
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  margin: -8px auto 0;
+}
+
+.podium-base {
+  width: 80px;
+  height: 20px;
+  background: linear-gradient(180deg, #cbd5e1 0%, #94a3b8 100%);
+  border-radius: 0 0 4px 4px;
+}
+
+/* People */
+.person {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   transition: all 0.3s ease;
-  z-index: 1;
+}
+
+.person.speaking {
+  transform: scale(1.05);
 }
 
 .host {
+  left: 50%;
+  top: 15%;
+  transform: translateX(-50%);
+}
+
+.host.speaking {
+  transform: translateX(-50%) scale(1.08);
+}
+
+.guest-1 {
+  left: 12%;
+  top: 45%;
+}
+
+.guest-2 {
+  left: 30%;
+  top: 65%;
+}
+
+.guest-3 {
+  right: 30%;
+  top: 65%;
+}
+
+.mic {
   position: absolute;
-  top: 50%;
-  left: 20%;
-  transform: translateY(-50%);
+  top: -15px;
+  width: 16px;
+  height: 20px;
+  background: #64748b;
+  border-radius: 8px 8px 4px 4px;
 }
 
-.guests-container {
+.mic::after {
+  content: '';
   position: absolute;
-  right: 20%;
-  top: 50%;
-  transform: translateY(-50%);
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-}
-
-.guest-a {
-  transform: translateY(-20px);
-}
-
-.guest-b {
-  transform: translateY(20px);
+  top: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 6px;
+  height: 6px;
+  background: #94a3b8;
+  border-radius: 50%;
 }
 
 .avatar {
-  width: 56px;
-  height: 56px;
-  background: white;
+  width: 48px;
+  height: 48px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
   transition: all 0.3s ease;
-  color: #6b7280;
 }
 
-.host .avatar {
-  width: 64px;
-  height: 64px;
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-  color: white;
+.host-avatar {
+  width: 56px;
+  height: 56px;
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%);
 }
 
-.guest-a .avatar {
-  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-  color: white;
-}
+.guest-1-avatar { background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); }
+.guest-2-avatar { background: linear-gradient(135deg, var(--color-accent-warm) 0%, #b45309 100%); }
+.guest-3-avatar { background: linear-gradient(135deg, var(--color-success) 0%, #047857 100%); }
 
-.guest-b .avatar {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-  color: white;
-}
-
-.participant.speaking .avatar {
-  transform: scale(1.15);
+.person.speaking .avatar {
   box-shadow: 0 0 20px rgba(99, 102, 241, 0.4);
 }
 
-.participant-info {
+.avatar-emoji {
+  font-size: 1.25rem;
+}
+
+.host .avatar-emoji { font-size: 1.5rem; }
+
+.person-info {
   text-align: center;
+  margin-top: 6px;
 }
 
-.name {
-  font-size: 0.8rem;
+.person-info .name {
+  display: block;
+  font-size: 0.75rem;
   font-weight: 600;
-  color: #6b7280;
+  color: var(--color-text);
 }
 
-.speaking-wave {
+.person-info .role {
+  display: block;
+  font-size: 0.65rem;
+  color: var(--color-text-muted);
+}
+
+/* Sound Bar */
+.sound-bar {
   display: flex;
-  align-items: center;
-  justify-content: center;
+  align-items: flex-end;
   gap: 2px;
-  height: 16px;
+  height: 12px;
   margin-top: 4px;
   opacity: 0;
   transition: opacity 0.3s;
 }
 
-.speaking-wave.active {
-  opacity: 1;
+.sound-bar.active { opacity: 1; }
+
+.sound-bar span {
+  width: 2px;
+  background: var(--color-primary);
+  border-radius: 1px;
+  animation: soundBar 0.4s ease-in-out infinite alternate;
 }
 
-.speaking-wave::before,
-.speaking-wave::after {
-  content: '';
-  width: 3px;
-  height: 8px;
-  background: #6366f1;
-  border-radius: 2px;
-  animation: wave 0.5s ease-in-out infinite alternate;
+.sound-bar span:nth-child(1) { height: 4px; animation-delay: 0s; }
+.sound-bar span:nth-child(2) { height: 8px; animation-delay: 0.1s; }
+.sound-bar span:nth-child(3) { height: 6px; animation-delay: 0.2s; }
+
+@keyframes soundBar {
+  0% { transform: scaleY(0.5); }
+  100% { transform: scaleY(1); }
 }
 
-.speaking-wave::after {
-  animation-delay: 0.25s;
-}
-
-@keyframes wave {
-  0% { height: 4px; }
-  100% { height: 12px; }
-}
-
-.mic-stand {
+/* Wave */
+.wave-container {
   position: absolute;
-  bottom: 20px;
+  bottom: 8px;
   left: 50%;
   transform: translateX(-50%);
+  display: flex;
+  gap: 3px;
 }
 
-.mic-head {
-  width: 40px;
-  height: 60px;
-  background: linear-gradient(180deg, #374151 0%, #1f2937 100%);
-  border-radius: 8px 8px 4px 4px;
-  margin: 0 auto;
+.wave {
+  width: 3px;
+  height: 16px;
+  background: linear-gradient(180deg, var(--color-primary) 0%, var(--color-accent) 100%);
+  border-radius: 2px;
+  animation: waveAnim 0.8s ease-in-out infinite;
+}
+
+.wave:nth-child(1) { animation-delay: 0s; }
+.wave:nth-child(2) { animation-delay: 0.15s; }
+.wave:nth-child(3) { animation-delay: 0.3s; }
+
+@keyframes waveAnim {
+  0%, 100% { transform: scaleY(0.5); opacity: 0.4; }
+  50% { transform: scaleY(1); opacity: 1; }
+}
+
+/* Progress */
+.progress-bar {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 1.25rem;
   position: relative;
 }
 
-.mic-head::before {
-  content: '';
-  position: absolute;
-  top: 8px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 28px;
-  height: 28px;
-  background: radial-gradient(circle, #6b7280 0%, #374151 100%);
-  border-radius: 50%;
-}
-
-.mic-pole {
-  width: 8px;
-  height: 100px;
-  background: linear-gradient(90deg, #4b5563 0%, #6b7280 50%, #4b5563 100%);
-  margin: 0 auto;
-}
-
-.mic-base {
-  width: 60px;
-  height: 12px;
-  background: linear-gradient(180deg, #374151 0%, #1f2937 100%);
-  border-radius: 6px;
-  margin: 0 auto;
-}
-
-.stages {
+.progress-step {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 0.75rem;
-  margin-bottom: 1.5rem;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  position: relative;
 }
 
-.stage-item {
+.step-dot {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 1rem;
-  border-radius: 10px;
-  font-size: 0.85rem;
-  font-weight: 500;
+  justify-content: center;
+  background: var(--color-border-light);
+  border: 2px solid var(--color-border);
   transition: all 0.3s ease;
+  z-index: 1;
 }
 
-.stage-item.completed {
-  background: #f0fdf4;
-  color: #16a34a;
-  border: 1px solid #bbf7d0;
+.progress-step.active .step-dot {
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%);
+  border-color: var(--color-primary);
+  color: white;
+  box-shadow: 0 0 12px rgba(99, 102, 241, 0.4);
 }
 
-.stage-item.active {
-  background: linear-gradient(135deg, #e0e7ff 0%, #fae8ff 100%);
-  color: #6366f1;
-  border: 1px solid #c4b5fd;
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.2);
+.progress-step.completed .step-dot {
+  background: var(--color-success);
+  border-color: var(--color-success);
+  color: white;
 }
 
-.stage-item.pending {
-  background: #f3f4f6;
-  color: #9ca3af;
-}
-
-.stage-icon {
-  font-weight: 700;
-  font-size: 1rem;
-}
-
-.detail-container {
+.step-label {
+  font-size: 0.7rem;
+  color: var(--color-text-muted);
+  margin-top: 6px;
   text-align: center;
-  padding: 1rem;
-  background: #f9fafb;
-  border-radius: 12px;
-  border: 1px solid #e5e7eb;
 }
 
-.detail-text {
-  color: #6b7280;
-  font-size: 0.9rem;
-  line-height: 1.6;
+.progress-step.active .step-label {
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.progress-step.completed .step-label {
+  color: var(--color-success);
+}
+
+.step-line {
+  position: absolute;
+  top: 12px;
+  left: calc(50% + 14px);
+  right: calc(-50% + 14px);
+  height: 2px;
+  background: var(--color-border);
+}
+
+.step-line.filled {
+  background: var(--color-success);
+}
+
+/* Status */
+.status-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0.875rem 1rem;
+  background: var(--color-border-light);
+  border-radius: var(--radius-md);
+}
+
+.status-icon {
+  width: 32px;
+  height: 32px;
+  background: rgba(99, 102, 241, 0.1);
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-primary);
+  flex-shrink: 0;
+}
+
+.status-text {
+  color: var(--color-text-secondary);
+  font-size: 0.85rem;
+  flex: 1;
 }
 
 .error-text {
-  color: #dc2626;
-  font-size: 0.9rem;
-  margin-top: 0.5rem;
+  color: #ef4444;
+  font-size: 0.85rem;
   font-weight: 500;
+  width: 100%;
+}
+
+/* Completion */
+.complete-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.95);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+.complete-box {
+  text-align: center;
+  animation: popIn 0.4s ease;
+}
+
+@keyframes popIn {
+  0% { transform: scale(0.8); opacity: 0; }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.complete-icon {
+  width: 80px;
+  height: 80px;
+  background: linear-gradient(135deg, var(--color-success) 0%, #059669 100%);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  margin: 0 auto 1rem;
+}
+
+.complete-box h4 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: 0.25rem;
+}
+
+.complete-box p {
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+/* Responsive */
+@media (max-width: 700px) {
+  .studio-scene {
+    min-height: 180px;
+    padding: 1.5rem 1rem;
+  }
+  
+  .host { top: 12%; }
+  .guest-1 { left: 5%; top: 40%; }
+  .guest-2 { left: 25%; top: 60%; }
+  .guest-3 { right: 25%; top: 60%; }
+  
+  .avatar {
+    width: 36px;
+    height: 36px;
+  }
+  
+  .host-avatar {
+    width: 44px;
+    height: 44px;
+  }
+  
+  .avatar-emoji { font-size: 1rem; }
+  .host .avatar-emoji { font-size: 1.25rem; }
+  
+  .step-label {
+    font-size: 0.6rem;
+  }
 }
 </style>
