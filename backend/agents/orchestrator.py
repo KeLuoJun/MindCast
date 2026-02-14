@@ -63,7 +63,8 @@ class PodcastOrchestrator:
 
         self.host = HostAgent(self._llm)
         # We'll select guest instances per episode run to control guest count
-        self._guest_pool = {p.name: GuestAgent(p, self._llm) for p in GUEST_PERSONAS}
+        self._guest_pool = {p.name: GuestAgent(
+            p, self._llm) for p in GUEST_PERSONAS}
         self._app = self._build_graph().compile()
 
     def _build_graph(self) -> StateGraph:
@@ -95,7 +96,8 @@ class PodcastOrchestrator:
         """Run the complete podcast generation pipeline via LangGraph."""
         # 1. Select 1-2 guests randomly from the pool
         num_guests = random.randint(1, 2)
-        selected_names = random.sample(list(self._guest_pool.keys()), num_guests)
+        selected_names = random.sample(
+            list(self._guest_pool.keys()), num_guests)
         active_guests = [self._guest_pool[name] for name in selected_names]
 
         episode = Episode(guests=selected_names)
