@@ -42,14 +42,48 @@ _tasks: dict[str, dict] = {}
 # Debug endpoints — stage-by-stage backend verification
 # ---------------------------------------------------------------------------
 
+async def _translate_to_chinese(text: str, llm_service) -> str:
+    """Translate English text to Chinese using LLM."""
+    if not text or not text.strip():
+        return text
+    # Check if text contains English letters (simple detection)
+    has_english = any('\u0041' <= c <= '\u005a' or '\u0061' <= c <= '\u007a' for c in text)
+    if not has_english:
+        return text  # Already Chinese or no English
+    
+    try:
+        messages = [
+            {"role": "system", "content": "You are a translator. Translate the following news title and content to Chinese. Keep the translation natural and concise. Only return the translated text, no explanations."},
+            {"role": "user", "content": text}
+        ]
+        translated = await llm_service.chat(messages, temperature=0.3, max_tokens=1024)
+        return translated.strip() if translated else text
+    except Exception as e:
+        logger.warning(f"Translation failed: {e}")
+        return text
+
+
 @router.get("/debug/news")
-async def debug_news(max_results: int = 5):
+async def debug_news(max_results: int = 10):
     """Fetch daily news only (without topic/script/audio generation)."""
+    from backend.services.llm_service import get_llm_service
+    
     service = get_news_service()
     items = await service.get_daily_ai_news(max_results=max_results)
+    
+    # Translate to Chinese if needed
+    llm = get_llm_service()
+    translated_items = []
+    for item in items:
+        translated_title = await _translate_to_chinese(item.title, llm)
+        translated_content = await _translate_to_chinese(item.content, llm) if item.content else item.content
+        item.title = translated_title
+        item.content = translated_content
+        translated_items.append(item)
+    
     return {
-        "count": len(items),
-        "items": [item.model_dump() for item in items],
+        "count": len(translated_items),
+        "items": [item.model_dump() for item in translated_items],
     }
 
 

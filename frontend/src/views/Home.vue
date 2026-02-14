@@ -46,11 +46,18 @@
           {{ fetchingNews ? '获取中...' : '立即获取' }}
         </button>
         <transition name="slide">
-          <div v-if="newsContent" class="news-badge">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="20,6 9,17 4,12"/>
-            </svg>
-            已获取 {{ newsContent.count }} 篇资讯
+          <div v-if="newsContent" class="news-preview">
+            <div class="news-header">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="20,6 9,17 4,12"/>
+              </svg>
+              已获取 {{ newsContent.count }} 篇资讯
+            </div>
+            <ul class="news-list">
+              <li v-for="(item, idx) in newsContent.items" :key="idx" class="news-item">
+                {{ item.title || item.content?.slice(0, 60) + '...' }}
+              </li>
+            </ul>
           </div>
         </transition>
       </div>
@@ -254,11 +261,12 @@ async function fetchEpisodes() {
 async function fetchNews() {
   fetchingNews.value = true
   try {
-    const res = await fetch('/api/debug/news?max_results=5')
+    const res = await fetch('/api/debug/news?max_results=10')
     const data = await res.json()
     newsContent.value = {
-      count: data.news?.length || data.length || 0,
-      summary: data.news?.[0]?.title || '已加载最新 AI 资讯'
+      count: data.count || 0,
+      items: data.items || [],
+      summary: data.items?.[0]?.title || data.items?.[0]?.content || '已加载最新 AI 资讯'
     }
     scriptDraft.value = null
   } catch (e) {
@@ -688,16 +696,49 @@ onMounted(fetchEpisodes)
   to { transform: rotate(360deg); }
 }
 
-.news-badge {
+.news-preview {
+  padding: 12px;
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  border-radius: var(--radius-md);
+}
+
+.news-header {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 12px;
-  background: rgba(16, 185, 129, 0.1);
-  border-radius: var(--radius-md);
   font-size: 0.8rem;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--color-success);
+  margin-bottom: 8px;
+}
+
+.news-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.news-item {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+  line-height: 1.4;
+  padding-left: 12px;
+  position: relative;
+}
+
+.news-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 6px;
+  width: 4px;
+  height: 4px;
+  background: var(--color-primary);
+  border-radius: 50%;
 }
 
 /* Section Header */
