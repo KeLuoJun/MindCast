@@ -1,14 +1,40 @@
 <template>
   <div class="player" v-if="episodeId">
     <audio ref="audioEl" :src="`/api/episodes/${episodeId}/audio`" preload="metadata" />
-    <div class="player-controls">
-      <button class="btn-play" @click="togglePlay">
-        {{ playing ? '⏸️' : '▶️' }}
-      </button>
-      <div class="progress-bar" @click="seek">
-        <div class="progress-fill" :style="{ width: progress + '%' }"></div>
+    <div class="player-wrapper">
+      <div class="player-main">
+        <button class="btn-control btn-prev">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+            <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/>
+          </svg>
+        </button>
+
+        <button class="btn-control btn-play" @click="togglePlay">
+          <svg v-if="!playing" viewBox="0 0 24 24" width="28" height="28" fill="currentColor">
+            <path d="M8 5v14l11-7z"/>
+          </svg>
+          <svg v-else viewBox="0 0 24 24" width="28" height="28" fill="currentColor">
+            <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+          </svg>
+        </button>
+
+        <button class="btn-control btn-next">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+            <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/>
+          </svg>
+        </button>
       </div>
-      <span class="time-display">{{ currentTimeStr }} / {{ durationStr }}</span>
+
+      <div class="progress-container">
+        <span class="time-display">{{ currentTimeStr }}</span>
+        <div class="progress-bar" @click="seek">
+          <div class="progress-track"></div>
+          <div class="progress-fill" :style="{ width: progress + '%' }">
+            <div class="progress-thumb"></div>
+          </div>
+        </div>
+        <span class="time-display">{{ durationStr }}</span>
+      </div>
     </div>
   </div>
 </template>
@@ -69,45 +95,119 @@ onUnmounted(() => {
 <style scoped>
 .player {
   background: white;
-  border-radius: 12px;
-  padding: 1rem 1.5rem;
-  margin: 1rem 0;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  border-radius: 20px;
+  padding: 1.5rem 2rem;
+  margin: 2rem 0;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
+  border: 1px solid #e5e7eb;
 }
 
-.player-controls {
+.player-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.player-main {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+}
+
+.btn-control {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #f3f4f6;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #6b7280;
+  transition: all 0.2s;
+}
+
+.btn-control:hover {
+  background: #e5e7eb;
+  color: #374151;
+  transform: scale(1.05);
+}
+
+.btn-control:active {
+  transform: scale(0.95);
+}
+
+.btn-play {
+  width: 64px;
+  height: 64px;
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  color: white;
+  box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
+}
+
+.btn-play:hover {
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+  box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
+}
+
+.progress-container {
   display: flex;
   align-items: center;
   gap: 1rem;
 }
 
-.btn-play {
-  background: none;
-  border: none;
-  font-size: 1.5rem;
-  cursor: pointer;
-  padding: 0;
+.time-display {
+  font-size: 0.85rem;
+  color: #9ca3af;
+  font-weight: 500;
+  min-width: 45px;
+  text-align: center;
 }
 
 .progress-bar {
   flex: 1;
-  height: 6px;
-  background: #e5e5ea;
-  border-radius: 3px;
+  height: 8px;
   cursor: pointer;
   position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.progress-track {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 100%;
+  background: #e5e7eb;
+  border-radius: 4px;
 }
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #667eea, #764ba2);
-  border-radius: 3px;
-  transition: width 0.2s;
+  background: linear-gradient(90deg, #6366f1 0%, #8b5cf6 50%, #a855f7 100%);
+  border-radius: 4px;
+  transition: width 0.1s;
+  position: relative;
+  min-width: 8px;
 }
 
-.time-display {
-  font-size: 0.8rem;
-  color: #86868b;
-  white-space: nowrap;
+.progress-thumb {
+  position: absolute;
+  right: -6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  background: white;
+  border-radius: 50%;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  border: 3px solid #6366f1;
+}
+
+.progress-bar:hover .progress-thumb {
+  transform: translateY(-50%) scale(1.2);
 }
 </style>
