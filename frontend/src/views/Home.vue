@@ -23,7 +23,7 @@
         <p>从 AI 领域获取最新新闻和话题</p>
         <button
           class="btn-action btn-primary"
-          :disabled="fetchingNews || generating"
+          :disabled="isBusy"
           @click="fetchNews"
         >
           <span v-if="fetchingNews" class="spinner"></span>
@@ -43,14 +43,73 @@
           </svg>
         </div>
         <h3>生成播客</h3>
-        <p>基于获取的内容，AI 嘉宾进行深度讨论</p>
+        <p>支持一键生成，或逐步确认文稿后再合成语音</p>
+
+        <div class="mode-switch">
+          <button
+            class="mode-btn"
+            :class="{ active: workflowMode === 'one-click' }"
+            :disabled="isBusy"
+            @click="workflowMode = 'one-click'"
+          >
+            一键生成
+          </button>
+          <button
+            class="mode-btn"
+            :class="{ active: workflowMode === 'step-by-step' }"
+            :disabled="isBusy"
+            @click="workflowMode = 'step-by-step'"
+          >
+            分步确认
+          </button>
+        </div>
+
         <button
+          v-if="workflowMode === 'one-click'"
           class="btn-action btn-secondary"
-          :disabled="!hasNews || generating"
+          :disabled="!hasNews || isBusy"
           @click="startGenerate"
         >
           {{ generating ? '生成中…' : '开始生成' }}
         </button>
+
+        <template v-else>
+          <button
+            class="btn-action btn-secondary"
+            :disabled="!hasNews || isBusy"
+            @click="generateScriptPreview"
+          >
+            {{ generatingScript ? '文稿生成中…' : (hasScriptDraft ? '重新生成文稿' : '生成文稿预览') }}
+          </button>
+          <button
+            class="btn-action btn-secondary btn-confirm"
+            :disabled="!hasScriptDraft || isBusy"
+            @click="confirmScriptSynthesis"
+          >
+            {{ synthesizing ? '合成中…' : '确认文稿并合成语音' }}
+          </button>
+        </template>
+      </div>
+    </section>
+
+    <section v-if="workflowMode === 'step-by-step' && hasScriptDraft" class="script-editor-section">
+      <div class="section-header">
+        <h2>文稿确认</h2>
+        <p class="section-subtitle">你可以编辑文稿后，再进行语音合成</p>
+      </div>
+      <div class="script-editor-card">
+        <h3>{{ scriptDraft.title || scriptDraft.topic }}</h3>
+        <p class="script-summary">{{ scriptDraft.summary }}</p>
+        <div class="script-lines">
+          <div
+            v-for="(line, idx) in scriptDraft.dialogue"
+            :key="`${line.speaker}-${idx}`"
+            class="script-line"
+          >
+            <div class="script-speaker">{{ line.speaker }}</div>
+            <textarea v-model="line.text" rows="3"></textarea>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -115,10 +174,16 @@ import GeneratePanel from '../components/GeneratePanel.vue'
 const episodes = ref([])
 const generating = ref(false)
 const fetchingNews = ref(false)
+const generatingScript = ref(false)
+const synthesizing = ref(false)
 const taskId = ref(null)
 const newsContent = ref(null)
+const workflowMode = ref('one-click')
+const scriptDraft = ref(null)
 
 const hasNews = computed(() => newsContent.value !== null)
+const hasScriptDraft = computed(() => scriptDraft.value && Array.isArray(scriptDraft.value.dialogue) && scriptDraft.value.dialogue.length > 0)
+const isBusy = computed(() => fetchingNews.value || generating.value || generatingScript.value || synthesizing.value)
 
 async function fetchEpisodes() {
   try {
@@ -138,6 +203,7 @@ async function fetchNews() {
       count: data.news?.length || data.length || 0,
       summary: data.news?.[0]?.title || '获取成功，已加载最新 AI 资讯'
     }
+    scriptDraft.value = null
   } catch (e) {
     console.error('Failed to fetch news:', e)
   } finally {
@@ -158,10 +224,72 @@ async function startGenerate() {
   }
 }
 
+async function generateScriptPreview() {
+  if (!hasNews.value) return
+  generatingScript.value = true
+  try {
+    const res = await fetch('/api/script/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({})
+    })
+    const data = await res.json()
+    scriptDraft.value = {
+      title: data.title || data.topic || '',
+      topic: data.topic || '',
+      summary: data.summary || '',
+      guests: data.guests || [],
+      news_sources: data.news_sources || [],
+      dialogue: (data.dialogue || []).map(line => ({
+        speaker: line.speaker,
+        text: line.text,
+        emotion: line.emotion || 'neutral'
+      }))
+    }
+  } catch (e) {
+    console.error('Failed to generate script preview:', e)
+  } finally {
+    generatingScript.value = false
+  }
+}
+
+async function confirmScriptSynthesis() {
+  if (!hasScriptDraft.value) return
+  synthesizing.value = true
+  try {
+    const payload = {
+      title: scriptDraft.value.title,
+      topic: scriptDraft.value.topic,
+      summary: scriptDraft.value.summary,
+      guests: scriptDraft.value.guests,
+      news_sources: scriptDraft.value.news_sources,
+      dialogue: scriptDraft.value.dialogue
+        .map(line => ({
+          speaker: line.speaker,
+          text: (line.text || '').trim(),
+          emotion: line.emotion || 'neutral'
+        }))
+        .filter(line => line.text)
+    }
+    const res = await fetch('/api/script/synthesize', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+    const data = await res.json()
+    taskId.value = data.task_id
+  } catch (e) {
+    console.error('Failed to start script synthesis:', e)
+    synthesizing.value = false
+  }
+}
+
 function onCompleted() {
   generating.value = false
+  synthesizing.value = false
   taskId.value = null
   newsContent.value = null
+  scriptDraft.value = null
   fetchEpisodes()
 }
 
@@ -488,5 +616,78 @@ onMounted(fetchEpisodes)
   font-size: 0.75rem;
   color: #6366f1;
   font-weight: 500;
+}
+
+.mode-switch {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+  margin-bottom: 1rem;
+}
+
+.mode-btn {
+  border: 1px solid #d1d5db;
+  background: white;
+  color: #4b5563;
+  border-radius: 10px;
+  padding: 0.5rem 0.8rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.mode-btn.active {
+  border-color: #6366f1;
+  color: #6366f1;
+  background: #eef2ff;
+}
+
+.btn-confirm {
+  margin-top: 0.75rem;
+}
+
+.script-editor-section {
+  margin-top: 1.5rem;
+  margin-bottom: 2.5rem;
+}
+
+.script-editor-card {
+  background: white;
+  border-radius: 16px;
+  padding: 1.5rem;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+
+.script-summary {
+  color: #6b7280;
+  margin: 0.5rem 0 1rem;
+}
+
+.script-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.script-line {
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 0.75rem;
+  background: #f9fafb;
+}
+
+.script-speaker {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #4f46e5;
+  margin-bottom: 0.4rem;
+}
+
+.script-line textarea {
+  width: 100%;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 0.65rem;
+  resize: vertical;
+  font-family: inherit;
 }
 </style>
