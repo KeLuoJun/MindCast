@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 
 from backend.agents.base import BaseAgent
 from backend.agents.personas import HOST_PERSONA, build_system_prompt
@@ -28,20 +29,33 @@ class HostAgent(BaseAgent):
     # Topic selection
     # ------------------------------------------------------------------
 
-    async def select_topic(self, news_list: list[NewsItem]) -> dict:
+    async def select_topic(
+        self,
+        news_list: list[NewsItem],
+        *,
+        recent_topics: list[str] | None = None,
+    ) -> dict:
         """Pick the most compelling topic direction from a list of news items.
 
         Returns a dict with keys: ``index``, ``topic``, ``reason``, ``search_queries``.
         Optional keys: ``conflict_points``, ``angle_hint``.
         """
+        recent_topics = [t.strip()
+                         for t in (recent_topics or []) if t and t.strip()]
         news_summary = "\n".join(
             f"{i+1}. 【{item.title}】{item.content[:200]}"
             for i, item in enumerate(news_list)
         )
+        recent_topics_block = "\n".join(
+            f"- {topic}" for topic in recent_topics[:20]
+        ) or "（暂无往期话题）"
 
         prompt = f"""以下是今天获取到的{len(news_list)}条AI相关资讯：
 
 {news_summary}
+
+【往期已聊过的话题（必须规避重复）】
+{recent_topics_block}
 
 请你作为播客主持人，从中挑选**1个最具讨论价值的方向**来做今天这期播客。
 
@@ -63,6 +77,11 @@ class HostAgent(BaseAgent):
 四、信息增量
 - 优先有新信息或新解释框架的话题，避免炒冷饭
 
+五、去重硬约束（必须满足）
+- 你选择的topic不能与【往期已聊过的话题】语义重复
+- 特别避免再次选择“Claude/GPT发布新模型”这类模型发布泛话题
+- 如候选内容与往期高度重合，必须换一个更新颖的角度或换一条资讯
+
 请以JSON格式返回你的选择（不要包含markdown代码块标记）：
 {{
     "index": 选中的新闻序号,
@@ -83,18 +102,83 @@ class HostAgent(BaseAgent):
             if cleaned.endswith("```"):
                 cleaned = cleaned.rsplit("```", 1)[0]
             cleaned = cleaned.strip()
-            return json.loads(cleaned)
+            selected = json.loads(cleaned)
+
+            selected_topic = str(selected.get("topic", "")).strip()
+            if self._is_topic_repetitive(selected_topic, recent_topics):
+                logger.info(
+                    "Selected topic appears repetitive, switching to fallback topic. topic=%s",
+                    selected_topic,
+                )
+                return self._fallback_non_repetitive_topic(news_list, recent_topics)
+            return selected
         except json.JSONDecodeError:
             logger.error("Failed to parse topic selection JSON: %s", response)
-            # Fallback: use the first news item
-            return {
-                "index": 1,
-                "topic": news_list[0].title if news_list else "AI最新动态",
-                "reason": "默认选择首条资讯",
-                "conflict_points": ["技术推进与社会代价之间的冲突"],
-                "search_queries": [news_list[0].title] if news_list else ["AI最新动态"],
-                "angle_hint": "从普通用户受影响最明显的场景切入",
-            }
+            return self._fallback_non_repetitive_topic(news_list, recent_topics)
+
+    @staticmethod
+    def _topic_tokens(text: str) -> set[str]:
+        raw_tokens = re.findall(r"[\u4e00-\u9fffA-Za-z0-9]+", (text or "").lower())
+        return {t for t in raw_tokens if len(t) >= 2}
+
+    @classmethod
+    def _topic_similarity(cls, left: str, right: str) -> float:
+        left_tokens = cls._topic_tokens(left)
+        right_tokens = cls._topic_tokens(right)
+        if not left_tokens or not right_tokens:
+            return 0.0
+        inter = left_tokens & right_tokens
+        union = left_tokens | right_tokens
+        return len(inter) / len(union)
+
+    @classmethod
+    def _is_topic_repetitive(cls, topic: str, recent_topics: list[str]) -> bool:
+        normalized = (topic or "").lower()
+        if not normalized.strip() or not recent_topics:
+            return False
+
+        model_release_keywords = ["claude", "gpt", "模型", "发布", "新模型"]
+        looks_like_model_release = (
+            ("claude" in normalized or "gpt" in normalized)
+            and any(k in normalized for k in ["模型", "发布", "新模型", "发布会"])
+        )
+
+        for old_topic in recent_topics:
+            old_norm = old_topic.lower()
+            if normalized == old_norm:
+                return True
+            if cls._topic_similarity(topic, old_topic) >= 0.42:
+                return True
+            if looks_like_model_release and any(k in old_norm for k in model_release_keywords):
+                return True
+        return False
+
+    def _fallback_non_repetitive_topic(
+        self,
+        news_list: list[NewsItem],
+        recent_topics: list[str],
+    ) -> dict:
+        for i, item in enumerate(news_list, start=1):
+            if not self._is_topic_repetitive(item.title, recent_topics):
+                return {
+                    "index": i,
+                    "topic": item.title,
+                    "reason": "基于往期去重策略，选择与历史讨论重复度更低的资讯方向。",
+                    "conflict_points": ["新技术价值与落地成本如何平衡"],
+                    "search_queries": [item.title],
+                    "angle_hint": "从新增信息和用户真实影响切入",
+                }
+
+        # If all today's titles look similar, still return one but force a fresh angle
+        fallback_title = news_list[0].title if news_list else "AI最新动态"
+        return {
+            "index": 1,
+            "topic": f"{fallback_title}：这次真正的新变量是什么？",
+            "reason": "今日资讯与历史主题相似，改为聚焦“新增变量”的差异化讨论角度。",
+            "conflict_points": ["增量是真突破还是叙事包装"],
+            "search_queries": [fallback_title, "新增变量", "落地影响"],
+            "angle_hint": "不复述发布信息，专注比较新旧变化与外溢影响",
+        }
 
     # ------------------------------------------------------------------
     # Episode planning
