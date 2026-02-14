@@ -202,27 +202,60 @@
         <p>暂无节目，点击上方按钮生成第一期播客</p>
       </div>
       
-      <div v-else class="episodes-grid">
+      <div v-else class="episodes-list">
         <div
           v-for="(ep, idx) in episodes"
           :key="ep.id"
-          class="episode-card"
+          class="episode-item"
           @click="$router.push(`/episode/${ep.id}`)"
         >
-          <div class="episode-cover">
-            <div class="cover-play">
-              <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+          <div class="episode-icon">
+            <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M12 2a3 3 0 00-3 3v7a3 3 0 006 0V5a3 3 0 00-3-3z"/>
+              <path d="M19 10v2a7 7 0 01-14 0v-2"/>
+              <line x1="12" y1="19" x2="12" y2="22"/>
+            </svg>
+          </div>
+          <div class="episode-info">
+            <div class="episode-header">
+              <span class="episode-badge">第{{ idx + 1 }}期</span>
+              <h3>{{ ep.title }}</h3>
+              <span class="episode-date">{{ formatDate(ep.created_at) }}</span>
+            </div>
+            <p class="episode-summary">{{ ep.summary }}</p>
+            <div class="episode-meta">
+              <div class="episode-guests">
+                <span v-for="g in ep.guests" :key="g" class="guest">
+                  <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
+                    <circle cx="12" cy="7" r="4"/>
+                  </svg>
+                  {{ g }}
+                </span>
+              </div>
+              <div class="episode-stats">
+                <span v-if="ep.word_count" class="stat">
+                  <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                    <polyline points="14,2 14,8 20,8"/>
+                  </svg>
+                  {{ ep.word_count }}字
+                </span>
+                <span v-if="ep.duration_seconds" class="stat">
+                  <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <polyline points="12,6 12,12 16,14"/>
+                  </svg>
+                  {{ formatDuration(ep.duration_seconds) }}
+                </span>
+              </div>
+            </div>
+          </div>
+          <div class="episode-action">
+            <div class="play-button">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
                 <path d="M8 5v14l11-7z"/>
               </svg>
-            </div>
-            <span v-if="ep.duration_seconds" class="duration">{{ formatDuration(ep.duration_seconds) }}</span>
-          </div>
-          <div class="episode-body">
-            <span class="episode-date">{{ formatDate(ep.created_at) }}</span>
-            <h3>{{ ep.title }}</h3>
-            <p>{{ ep.summary }}</p>
-            <div class="episode-guests">
-              <span v-for="g in ep.guests" :key="g" class="guest">{{ g }}</span>
             </div>
           </div>
         </div>
@@ -893,109 +926,153 @@ onMounted(fetchEpisodes)
   font-size: 0.95rem;
 }
 
-.episodes-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1.25rem;
+.episodes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
 }
 
-.episode-card {
+.episode-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
   background: white;
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  overflow: hidden;
-  box-shadow: var(--shadow-card);
+  padding: 1rem 1.25rem;
   cursor: pointer;
-  transition: all var(--transition-normal);
-}
-
-.episode-card:hover {
-  transform: translateY(-3px);
-  box-shadow: var(--shadow-md);
-}
-
-.episode-cover {
-  position: relative;
-  height: 100px;
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.cover-play {
-  width: 44px;
-  height: 44px;
-  background: rgba(255,255,255,0.25);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
   transition: all var(--transition-fast);
 }
 
-.episode-card:hover .cover-play {
-  background: white;
-  color: var(--color-primary);
-  transform: scale(1.1);
+.episode-item:hover {
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-md);
 }
 
-.duration {
-  position: absolute;
-  bottom: 8px;
-  right: 8px;
-  background: rgba(0,0,0,0.5);
-  padding: 2px 8px;
-  border-radius: var(--radius-sm);
-  font-size: 0.7rem;
+.episode-item:hover .episode-icon {
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%);
   color: white;
 }
 
-.episode-body {
-  padding: 1rem;
+.episode-item:hover .play-button {
+  background: var(--color-primary);
+  color: white;
 }
 
-.episode-date {
-  font-size: 0.75rem;
-  color: var(--color-text-muted);
+.episode-icon {
+  width: 48px;
+  height: 48px;
+  background: var(--color-border-light);
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+  transition: all var(--transition-fast);
 }
 
-.episode-body h3 {
+.episode-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.episode-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.25rem;
+}
+
+.episode-badge {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  border-radius: var(--radius-sm);
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--color-primary);
+}
+
+.episode-info h3 {
   font-size: 0.95rem;
   font-weight: 600;
   color: var(--color-text);
-  margin: 0.375rem 0;
   line-height: 1.4;
+  flex: 1;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 1;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
 
-.episode-body p {
-  font-size: 0.8rem;
+.episode-date {
+  font-size: 0.7rem;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.episode-summary {
+  font-size: 0.75rem;
   color: var(--color-text-secondary);
   line-height: 1.5;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 1;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  margin-bottom: 0.375rem;
+}
+
+.episode-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .episode-guests {
   display: flex;
   gap: 0.375rem;
-  flex-wrap: wrap;
-  margin-top: 0.75rem;
 }
 
 .guest {
-  padding: 3px 8px;
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
-  border-radius: var(--radius-full);
-  font-size: 0.7rem;
-  color: var(--color-primary);
-  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 8px;
+  background: var(--color-border-light);
+  border-radius: var(--radius-sm);
+  font-size: 0.65rem;
+  color: var(--color-text-secondary);
+}
+
+.episode-stats {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.stat {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.65rem;
+  color: var(--color-text-muted);
+}
+
+.episode-action {
+  flex-shrink: 0;
+}
+
+.play-button {
+  width: 40px;
+  height: 40px;
+  background: var(--color-border-light);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-secondary);
+  transition: all var(--transition-fast);
 }
 
 /* Transitions */
@@ -1015,10 +1092,6 @@ onMounted(fetchEpisodes)
   .actions-grid {
     grid-template-columns: 1fr;
   }
-  
-  .episodes-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
 }
 
 @media (max-width: 600px) {
@@ -1030,8 +1103,43 @@ onMounted(fetchEpisodes)
     font-size: 1.4rem;
   }
   
-  .episodes-grid {
-    grid-template-columns: 1fr;
+  .episode-item {
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    padding: 0.875rem 1rem;
+  }
+  
+  .episode-icon {
+    width: 40px;
+    height: 40px;
+  }
+  
+  .episode-info {
+    order: 3;
+    width: 100%;
+  }
+  
+  .episode-header {
+    flex-wrap: wrap;
+  }
+  
+  .episode-badge {
+    display: none;
+  }
+  
+  .episode-meta {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.375rem;
+  }
+  
+  .episode-stats {
+    display: none;
+  }
+  
+  .play-button {
+    width: 36px;
+    height: 36px;
   }
 }
 </style>
