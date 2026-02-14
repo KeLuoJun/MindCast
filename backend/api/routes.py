@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import random
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
@@ -16,6 +17,7 @@ from backend.api.schemas import (
     EpisodeDetail,
     EpisodeSummary,
     GenerateRequest,
+    ScriptSynthesisRequest,
     ScriptPreviewRequest,
     TaskCreatedResponse,
 )
@@ -25,7 +27,7 @@ from backend.knowledge.chroma_kb import (
     BACKGROUND_MATERIAL,
     KNOWLEDGE_SCOPE_GLOBAL,
 )
-from backend.models import DetailedInfo, Episode
+from backend.models import DetailedInfo, DialogueLine, Episode
 from backend.services.run_logger import EpisodeRunLogger
 from backend.services.news_service import get_news_service
 
@@ -56,6 +58,10 @@ async def debug_script_preview(req: ScriptPreviewRequest | None = None):
     """Run pipeline until dialogue generation (skip TTS and audio stitching)."""
     payload = req or ScriptPreviewRequest()
     orchestrator = PodcastOrchestrator()
+    num_guests = random.randint(1, 2)
+    selected_names = random.sample(list(orchestrator._guest_pool.keys()), num_guests)
+    active_guests = [orchestrator._guest_pool[name] for name in selected_names]
+    speaker_voice_map = orchestrator._build_speaker_voice_map(active_guests)
 
     news_items = await orchestrator._news.get_daily_ai_news(
         max_results=payload.max_news_results
@@ -63,7 +69,13 @@ async def debug_script_preview(req: ScriptPreviewRequest | None = None):
     if not news_items:
         raise HTTPException(status_code=502, detail="No news items retrieved")
 
-    topic = await orchestrator.host.select_topic(news_items)
+    recent_topics = orchestrator._load_recent_topics(
+        limit=20,
+    )
+    topic = await orchestrator.host.select_topic(
+        news_items,
+        recent_topics=recent_topics,
+    )
     search_queries = topic.get("search_queries", [])[
         : payload.max_search_queries]
 
@@ -100,14 +112,14 @@ async def debug_script_preview(req: ScriptPreviewRequest | None = None):
     plan = await orchestrator.host.plan_episode(
         topic,
         [info.model_dump() for info in detailed_info],
-        [guest.persona.name for guest in orchestrator.guests],
+        selected_names,
     )
 
     episode = Episode(
         topic=plan.topic,
         title=plan.topic,
         summary=plan.summary,
-        guests=[guest.persona.name for guest in orchestrator.guests],
+        guests=selected_names,
     )
     # Retrieve RAG context
     rag_context = ""
@@ -129,23 +141,28 @@ async def debug_script_preview(req: ScriptPreviewRequest | None = None):
             "progress": None,
             "run_logger": run_logger,
             "rag_context": rag_context,
+            "active_guests": active_guests,
+            "speaker_voice_map": speaker_voice_map,
         },
     )
     word_count = sum(len(line.text) for line in dialogue)
 
     orchestrator.host.reset_history()
-    for guest in orchestrator.guests:
+    for guest in active_guests:
         guest.reset_history()
 
     return {
+        "title": plan.topic,
         "topic": plan.topic,
         "summary": plan.summary,
+        "guests": selected_names,
         "talking_points": plan.talking_point_texts(),
         "word_count": word_count,
         "line_count": len(dialogue),
         "news_count": len(news_items),
         "search_queries": search_queries,
         "generation_log_path": str(run_logger.log_path),
+        "news_sources": [item.model_dump() for item in news_items],
         "dialogue": [
             {
                 "speaker": line.speaker,
@@ -155,6 +172,77 @@ async def debug_script_preview(req: ScriptPreviewRequest | None = None):
             for line in dialogue
         ],
     }
+
+
+@router.post("/script/preview")
+async def script_preview(req: ScriptPreviewRequest | None = None):
+    """Preview generated script for manual confirmation/editing."""
+    return await debug_script_preview(req)
+
+
+@router.post("/script/synthesize", response_model=TaskCreatedResponse)
+async def synthesize_from_script(req: ScriptSynthesisRequest):
+    """Synthesize audio from frontend-edited script in background."""
+    if not req.dialogue:
+        raise HTTPException(status_code=400, detail="Dialogue is required")
+
+    task_id = f"task_{len(_tasks) + 1}"
+    _tasks[task_id] = {
+        "status": "started",
+        "stage": "audio",
+        "detail": "正在准备语音合成…",
+        "episode_id": None,
+    }
+
+    async def _run():
+        orchestrator = PodcastOrchestrator()
+
+        async def _progress(stage: str, detail: str):
+            _tasks[task_id].update({"stage": stage, "detail": detail})
+
+        try:
+            dialogue_lines = [
+                {
+                    "speaker": line.speaker,
+                    "text": line.text,
+                    "ssml_text": line.text,
+                    "emotion": line.emotion or "neutral",
+                    "voice_id": line.voice_id or "",
+                }
+                for line in req.dialogue
+                if line.text.strip()
+            ]
+            if not dialogue_lines:
+                raise RuntimeError("Dialogue is empty after filtering")
+
+            episode = await orchestrator.synthesize_episode_from_script(
+                title=req.title,
+                topic=req.topic,
+                summary=req.summary,
+                guests=req.guests,
+                dialogue=[
+                    DialogueLine(**line)
+                    for line in dialogue_lines
+                ],
+                news_sources=req.news_sources,
+                progress=_progress,
+            )
+            _tasks[task_id].update({
+                "status": "completed",
+                "stage": "done",
+                "detail": f"完成！ID: {episode.id}",
+                "episode_id": episode.id,
+            })
+        except Exception as exc:
+            logger.exception("Script synthesis failed")
+            _tasks[task_id].update({
+                "status": "failed",
+                "stage": "error",
+                "detail": str(exc),
+            })
+
+    asyncio.create_task(_run())
+    return TaskCreatedResponse(task_id=task_id, message="语音合成任务已创建")
 
 
 # ---------------------------------------------------------------------------

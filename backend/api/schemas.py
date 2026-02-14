@@ -21,6 +21,24 @@ class ScriptPreviewRequest(BaseModel):
     max_search_queries: int = Field(default=3, ge=1, le=5)
 
 
+class ScriptLineIn(BaseModel):
+    """Editable dialogue line submitted by frontend before synthesis."""
+    speaker: str
+    text: str
+    emotion: str = "neutral"
+    voice_id: str | None = None
+
+
+class ScriptSynthesisRequest(BaseModel):
+    """Request body for synthesizing audio from an edited script."""
+    title: str = ""
+    topic: str = ""
+    summary: str = ""
+    guests: list[str] = Field(default_factory=list)
+    dialogue: list[ScriptLineIn] = Field(default_factory=list)
+    news_sources: list[dict] = Field(default_factory=list)
+
+
 # ---------------------------------------------------------------------------
 # Responses
 # ---------------------------------------------------------------------------
