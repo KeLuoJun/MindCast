@@ -94,7 +94,6 @@ const stages = [
   { key: 'research', label: '深度搜索' },
   { key: 'planning', label: '节目策划' },
   { key: 'dialogue', label: '生成文本' },
-  { key: 'tts', label: '语音合成' },
   { key: 'audio', label: '音频拼接' },
   { key: 'done', label: '完成' },
 ]
@@ -140,8 +139,8 @@ function simulateSpeaking() {
   let idx = 0
 
   speakerInterval = setInterval(() => {
-    // Only simulate speaking during dialogue and tts stages
-    if (currentStage.value === 'dialogue' || currentStage.value === 'tts') {
+    // Only simulate speaking during dialogue and audio stages
+    if (currentStage.value === 'dialogue' || currentStage.value === 'audio') {
       currentSpeaker.value = speakers[idx % speakers.length]
       idx++
     } else {
