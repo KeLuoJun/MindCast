@@ -2,16 +2,22 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import random
 from collections.abc import Awaitable, Callable
+from pathlib import Path
 from typing import Any, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 
 from backend.agents.guest import GuestAgent
 from backend.agents.host import HostAgent
-from backend.agents.personas import GUEST_PERSONAS
+from backend.agents.personas import (
+    GUEST_PERSONAS,
+    HOST_FIXED_VOICE_ID,
+    VOICE_LIBRARY_BY_GENDER,
+)
 from backend.config import settings
 from backend.knowledge import get_knowledge_base
 from backend.knowledge.chroma_kb import (
@@ -19,7 +25,7 @@ from backend.knowledge.chroma_kb import (
     KNOWLEDGE_SCOPE_GLOBAL,
 )
 from backend.logging_config import get_episode_file_handler
-from backend.models import DetailedInfo, DialogueLine, Episode, EpisodePlan
+from backend.models import DetailedInfo, DialogueLine, Episode, EpisodePlan, NewsItem
 from backend.services.audio_service import AudioService, audio_service
 from backend.services.llm_service import LLMService, get_llm_service
 from backend.services.news_service import NewsService, get_news_service
@@ -44,6 +50,7 @@ class OrchestratorState(TypedDict, total=False):
     run_logger: EpisodeRunLogger
     rag_context: str
     active_guests: list[GuestAgent]  # Guests for this specific run
+    speaker_voice_map: dict[str, str]
 
 
 class PodcastOrchestrator:
@@ -99,6 +106,7 @@ class PodcastOrchestrator:
         selected_names = random.sample(
             list(self._guest_pool.keys()), num_guests)
         active_guests = [self._guest_pool[name] for name in selected_names]
+        speaker_voice_map = self._build_speaker_voice_map(active_guests)
 
         episode = Episode(guests=selected_names)
         output_dir = settings.ensure_output_dir()
@@ -127,6 +135,7 @@ class PodcastOrchestrator:
                     "run_logger": run_log,
                     "rag_context": "",
                     "active_guests": active_guests,
+                    "speaker_voice_map": speaker_voice_map,
                 }
             )
             result_episode = final_state["episode"]
@@ -190,16 +199,49 @@ class PodcastOrchestrator:
     async def _node_select_topic(self, state: OrchestratorState) -> OrchestratorState:
         episode = state["episode"]
         await self._emit_progress(state, "topic", "主持人正在选题…")
-        topic = await self.host.select_topic(episode.news_sources)
+        recent_topics = self._load_recent_topics(
+            limit=20,
+            exclude_episode_id=episode.id,
+        )
+        topic = await self.host.select_topic(
+            episode.news_sources,
+            recent_topics=recent_topics,
+        )
         episode.topic = topic.get("topic", "")
         episode.title = episode.topic
         await self._emit_progress(
             state,
             "topic",
             f"选题完成: {episode.topic}",
-            payload=topic,
+            payload={**topic, "recent_topics_count": len(recent_topics)},
         )
         return {"episode": episode, "topic": topic}
+
+    def _load_recent_topics(
+        self,
+        *,
+        limit: int = 20,
+        exclude_episode_id: str | None = None,
+    ) -> list[str]:
+        """Load recent discussed topics from saved episodes for topic de-dup."""
+        output_dir: Path = settings.output_dir
+        if not output_dir.exists():
+            return []
+
+        topics: list[str] = []
+        for json_path in sorted(output_dir.glob("*.json"), reverse=True):
+            try:
+                if exclude_episode_id and json_path.stem == exclude_episode_id:
+                    continue
+                episode = Episode.load_json(json_path)
+                topic = (episode.topic or episode.title or "").strip()
+                if topic:
+                    topics.append(topic)
+                if len(topics) >= limit:
+                    break
+            except Exception:
+                continue
+        return topics
 
     async def _node_deep_research(self, state: OrchestratorState) -> OrchestratorState:
         topic = state["topic"]
@@ -341,35 +383,18 @@ class PodcastOrchestrator:
 
     async def _node_synthesize_tts(self, state: OrchestratorState) -> OrchestratorState:
         dialogue = state.get("dialogue", [])
-        await self._emit_progress(state, "tts", "正在合成语音…")
-
-        audio_segments: list[tuple[bytes, float]] = []
-        for i, line in enumerate(dialogue):
-            await self._emit_progress(
+        await self._emit_progress(state, "audio", "正在实时合成语音…")
+        audio_segments = await self._synthesize_dialogue_segments(
+            dialogue,
+            progress=lambda detail, payload: self._emit_progress(
                 state,
-                "tts",
-                f"语音合成 ({i + 1}/{len(dialogue)}): {line.speaker}",
-                payload={"speaker": line.speaker,
-                         "emotion": line.emotion, "text_len": len(line.text)},
-            )
-            audio_bytes = await self._tts.synthesize(
-                text=line.ssml_text,
-                voice_id=line.voice_id,
-                emotion=line.emotion,
-            )
-            audio_segments.append((audio_bytes, line.pause_after))
-            state["run_logger"].event(
-                "tts",
-                "tts segment generated",
-                payload={
-                    "index": i + 1,
-                    "speaker": line.speaker,
-                    "bytes": len(audio_bytes),
-                    "pause_after": line.pause_after,
-                },
-            )
-
-        await self._emit_progress(state, "tts", "语音合成全部完成")
+                "audio",
+                detail,
+                payload=payload,
+            ),
+            run_logger=state["run_logger"],
+        )
+        await self._emit_progress(state, "audio", "语音合成全部完成")
         return {"audio_segments": audio_segments}
 
     async def _node_stitch_audio(self, state: OrchestratorState) -> OrchestratorState:
@@ -448,11 +473,15 @@ class PodcastOrchestrator:
         shared_context.append({"role": "system", "content": bg_info})
 
         active_guests = state.get("active_guests", [])
+        speaker_voice_map = state.get("speaker_voice_map", {})
         guest_map = {g.persona.name: g for g in active_guests}
         guest_names = [g.persona.name for g in active_guests]
 
         # Helper to append a line and log it
         def _append_line(line: DialogueLine) -> None:
+            mapped_voice = speaker_voice_map.get(line.speaker)
+            if mapped_voice:
+                line.voice_id = mapped_voice
             dialogue.append(line)
             shared_context.append(
                 {"role": "assistant", "content": f"[{line.speaker}]: {line.text}"})
@@ -640,6 +669,172 @@ class PodcastOrchestrator:
         _append_line(closing_line)
 
         return dialogue
+
+    async def synthesize_episode_from_script(
+        self,
+        *,
+        title: str,
+        topic: str,
+        summary: str,
+        guests: list[str],
+        dialogue: list[DialogueLine],
+        news_sources: list[dict[str, Any]] | None = None,
+        progress: ProgressCallback = None,
+    ) -> Episode:
+        """Create an episode from a prepared/edited script and synthesize audio."""
+        episode = Episode(
+            title=title or topic,
+            topic=topic or title,
+            summary=summary,
+            guests=guests,
+            dialogue=dialogue,
+            news_sources=[NewsItem.model_validate(item)
+                          for item in (news_sources or [])],
+        )
+        episode.word_count = sum(len(line.text) for line in dialogue)
+
+        output_dir = settings.ensure_output_dir()
+        run_log = EpisodeRunLogger(output_dir / "logs" / f"{episode.id}.jsonl")
+        episode.generation_log_path = str(run_log.log_path)
+
+        ep_handler = get_episode_file_handler(episode.id, output_dir)
+        logging.getLogger().addHandler(ep_handler)
+
+        async def _emit(stage: str, detail: str, payload: dict[str, Any] | None = None):
+            logger.info("[%s] %s", stage, detail)
+            run_log.event(stage, detail, payload=payload)
+            if progress:
+                await progress(stage, detail)
+
+        try:
+            speaker_voice_map = self._build_speaker_voice_map(
+                [self._guest_pool[name]
+                    for name in guests if name in self._guest_pool]
+            )
+            for line in episode.dialogue:
+                if line.speaker in speaker_voice_map:
+                    line.voice_id = speaker_voice_map[line.speaker]
+                elif not line.voice_id:
+                    line.voice_id = HOST_FIXED_VOICE_ID
+                if not line.ssml_text:
+                    line.ssml_text = line.text
+
+            await _emit("audio", "正在实时合成语音…")
+            audio_segments = await self._synthesize_dialogue_segments(
+                episode.dialogue,
+                progress=lambda detail, payload: _emit("audio", detail, payload),
+                run_logger=run_log,
+            )
+
+            await _emit("audio", "正在拼接音频…")
+            audio_ext = settings.minimax_audio_format.lower()
+            if audio_ext not in {"mp3", "wav"}:
+                audio_ext = "wav"
+            output_path = output_dir / f"{episode.id}.{audio_ext}"
+            duration = await self._audio.stitch_episode(
+                audio_segments=audio_segments,
+                output_path=str(output_path),
+            )
+            episode.audio_path = str(output_path)
+            episode.duration_seconds = duration
+
+            metadata_path = episode.save_json(output_dir)
+            await _emit(
+                "done",
+                f"播客生成完成！ID: {episode.id}",
+                payload={
+                    "episode_id": episode.id,
+                    "metadata_path": str(metadata_path),
+                    "audio_path": str(output_path),
+                    "duration_seconds": duration,
+                },
+            )
+            return episode
+        finally:
+            logging.getLogger().removeHandler(ep_handler)
+            ep_handler.close()
+
+    async def _synthesize_dialogue_segments(
+        self,
+        dialogue: list[DialogueLine],
+        *,
+        progress: Callable[[str, dict[str, Any]], Awaitable[None]],
+        run_logger: EpisodeRunLogger,
+        max_concurrency: int = 4,
+    ) -> list[tuple[bytes, float]]:
+        """Synthesize dialogue into audio segments concurrently while preserving order."""
+        if not dialogue:
+            return []
+
+        semaphore = asyncio.Semaphore(max_concurrency)
+        ordered_segments: list[tuple[bytes, float] | None] = [None] * len(dialogue)
+
+        async def _worker(index: int, line: DialogueLine) -> tuple[int, DialogueLine, bytes]:
+            async with semaphore:
+                audio_bytes = await self._tts.synthesize(
+                    text=line.ssml_text,
+                    voice_id=line.voice_id,
+                    emotion=line.emotion,
+                )
+                return index, line, audio_bytes
+
+        tasks = [
+            asyncio.create_task(_worker(index, line))
+            for index, line in enumerate(dialogue)
+        ]
+
+        done_count = 0
+        total = len(tasks)
+        try:
+            for done in asyncio.as_completed(tasks):
+                index, line, audio_bytes = await done
+                ordered_segments[index] = (audio_bytes, line.pause_after)
+                done_count += 1
+                await progress(
+                    f"语音合成 ({done_count}/{total}): {line.speaker}",
+                    {
+                        "index": index + 1,
+                        "speaker": line.speaker,
+                        "emotion": line.emotion,
+                        "text_len": len(line.text),
+                        "bytes": len(audio_bytes),
+                    },
+                )
+                run_logger.event(
+                    "tts",
+                    "tts segment generated",
+                    payload={
+                        "index": index + 1,
+                        "speaker": line.speaker,
+                        "bytes": len(audio_bytes),
+                        "pause_after": line.pause_after,
+                    },
+                )
+        finally:
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
+
+        return [segment for segment in ordered_segments if segment is not None]
+
+    def _build_speaker_voice_map(self, active_guests: list[GuestAgent]) -> dict[str, str]:
+        """Build voice mapping for one episode run: fixed host + random guests."""
+        voice_map = {self.host.name: HOST_FIXED_VOICE_ID}
+        used_by_gender: dict[Any, set[str]] = {
+            gender: set() for gender in VOICE_LIBRARY_BY_GENDER
+        }
+        used_by_gender[self.host.persona.gender].add(HOST_FIXED_VOICE_ID)
+
+        for guest in active_guests:
+            pool = VOICE_LIBRARY_BY_GENDER.get(guest.persona.gender, [])
+            if not pool:
+                voice_map[guest.persona.name] = guest.persona.voice_id
+                continue
+            available = [vid for vid in pool if vid not in used_by_gender[guest.persona.gender]]
+            chosen = random.choice(available or pool)
+            used_by_gender[guest.persona.gender].add(chosen)
+            voice_map[guest.persona.name] = chosen
+        return voice_map
 
     @staticmethod
     def _build_background_info(
