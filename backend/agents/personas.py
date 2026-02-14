@@ -9,6 +9,28 @@ from __future__ import annotations
 from backend.models import Gender, PersonaConfig
 
 # ---------------------------------------------------------------------------
+# Voice library
+# ---------------------------------------------------------------------------
+
+HOST_FIXED_VOICE_ID = "Chinese (Mandarin)_Gentle_Senior"
+
+VOICE_LIBRARY_BY_GENDER: dict[Gender, list[str]] = {
+    Gender.MALE: [
+        "Chinese (Mandarin)_Unrestrained_Young_Man",
+        "hunyin_6",
+        "Chinese (Mandarin)_Gentleman",
+        "Chinese (Mandarin)_Southern_Young_Man",
+        "Chinese (Mandarin)_Radio_Host",
+        "Chinese (Mandarin)_Sincere_Adult",
+    ],
+    Gender.FEMALE: [
+        "Chinese (Mandarin)_Warm_Bestie",
+        "Chinese (Mandarin)_Gentle_Senior",
+        "Chinese (Mandarin)_Crisp_Girl",
+    ],
+}
+
+# ---------------------------------------------------------------------------
 # System prompt builder
 # ---------------------------------------------------------------------------
 
@@ -129,7 +151,7 @@ HOST_PERSONA = PersonaConfig(
     occupation="科技媒体主编",
     speaking_style="温暖而专业，善于用提问引导话题深入，喜欢做精彩的总结。语速适中，声音清晰有亲和力。偶尔用幽默化解紧张话题。",
     stance_bias="平衡中的谨慎乐观派：相信AI长期利好，但警惕短期泡沫与叙事过热。",
-    voice_id="female-shaonv",
+    voice_id=HOST_FIXED_VOICE_ID,
     background="新闻学硕士，曾在《第一财经》和36氪担任科技记者5年，采访过数十位AI领域创始人和学者。2022年创办独立科技播客，专注AI与社会的交叉议题。",
 )
 
@@ -146,7 +168,7 @@ GUEST_PERSONAS: list[PersonaConfig] = [
             "偶尔冒出冷幽默。技术讨论时会自然切换中英文。"
         ),
         stance_bias="技术现实主义：重可验证结果，反对空洞愿景，倾向用工程可行性评估价值。",
-        voice_id="male-qn-qingse",
+        voice_id="Chinese (Mandarin)_Unrestrained_Young_Man",
         background="清华计算机博士，曾在Google Brain和字节跳动AI Lab工作8年。主导过推荐系统和大语言模型相关项目。现为AI创业公司CTO，专注多模态AI应用。",
     ),
     PersonaConfig(
@@ -161,7 +183,7 @@ GUEST_PERSONAS: list[PersonaConfig] = [
             "经常说'换个角度想'、'你有没有想过'。讨论时爱引用各种跨领域的案例。"
         ),
         stance_bias="商业增长乐观派：偏好从用户价值和商业落地看AI，容忍早期不完美。",
-        voice_id="female-yujie",
+        voice_id="Chinese (Mandarin)_Warm_Bestie",
         background="北大经济学和计算机双学位，硅谷产品经理3年（Meta AR/VR部门），回国后创办AI+教育创业公司，获得红杉资本Pre-A轮融资。",
     ),
     PersonaConfig(
@@ -176,7 +198,7 @@ GUEST_PERSONAS: list[PersonaConfig] = [
             "经常从历史和哲学的角度看待技术问题。会用'我想请大家思考一个问题'引发深层讨论。"
         ),
         stance_bias="人文审慎派：优先关注社会代价与伦理边界，反对只谈效率不谈后果。",
-        voice_id="presenter_male",
+        voice_id="Chinese (Mandarin)_Gentleman",
         background="中国人民大学哲学博士，曾在牛津大学互联网研究所做访问学者。现任中科院自动化所AI伦理与治理研究中心副主任。出版过《智能的边界》一书。",
     ),
 ]
