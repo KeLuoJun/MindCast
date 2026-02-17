@@ -105,10 +105,80 @@
           </button>
         </div>
 
+        <div class="config-block">
+          <label class="hint-text">话题选择（可从资讯中选，或手动输入）</label>
+          <select v-model="selectedTopic" class="input-control" :disabled="!hasNews || isBusy">
+            <option value="">请选择资讯话题</option>
+            <option v-for="(item, idx) in newsContent?.items || []" :key="`topic-${idx}`" :value="item.title">
+              {{ item.title }}
+            </option>
+          </select>
+          <input
+            v-model="customTopic"
+            class="input-control"
+            type="text"
+            placeholder="或输入自定义话题"
+            :disabled="!hasNews || isBusy"
+          />
+        </div>
+
+        <div class="config-block">
+          <div class="topic-row">
+            <label class="hint-text">嘉宾池配置与选择（最多 3 位）</label>
+            <button class="btn-inline" :disabled="isBusy || loadingGuests" @click="loadGuests">
+              {{ loadingGuests ? '加载中...' : '刷新' }}
+            </button>
+          </div>
+
+          <div class="guest-list">
+            <label v-for="guest in guests" :key="guest.name" class="guest-item">
+              <input
+                type="checkbox"
+                :checked="selectedGuests.includes(guest.name)"
+                :disabled="!selectedGuests.includes(guest.name) && selectedGuests.length >= maxGuests"
+                @change="toggleGuestSelection(guest.name)"
+              />
+              <div class="guest-meta">
+                <strong>{{ guest.name }}</strong>
+                <span>{{ guest.mbti }} · {{ guest.occupation }}</span>
+              </div>
+              <div class="guest-actions">
+                <button class="btn-inline" :disabled="isBusy" @click.prevent="startEditGuest(guest)">编辑</button>
+                <button class="btn-inline" :disabled="isBusy" @click.prevent="removeGuest(guest.name)">删除</button>
+              </div>
+            </label>
+            <p v-if="!guests.length" class="hint-text">暂无嘉宾，请先创建嘉宾。</p>
+          </div>
+
+          <div class="form-grid">
+            <input v-model="guestForm.name" class="input-control" type="text" placeholder="姓名" :disabled="isBusy" />
+            <input v-model="guestForm.mbti" class="input-control" type="text" placeholder="MBTI (如 INTJ)" :disabled="isBusy" />
+            <input v-model="guestForm.occupation" class="input-control" type="text" placeholder="职业" :disabled="isBusy" />
+            <select v-model="guestForm.gender" class="input-control" :disabled="isBusy">
+              <option value="male">男</option>
+              <option value="female">女</option>
+            </select>
+            <input v-model.number="guestForm.age" class="input-control" type="number" min="18" max="90" placeholder="年龄" :disabled="isBusy" />
+            <input v-model="guestForm.voice_id" class="input-control" type="text" placeholder="音色ID（可选）" :disabled="isBusy" />
+          </div>
+          <textarea v-model="guestForm.personality" class="input-control" rows="2" placeholder="性格特征" :disabled="isBusy"></textarea>
+          <textarea v-model="guestForm.speaking_style" class="input-control" rows="2" placeholder="说话风格" :disabled="isBusy"></textarea>
+          <textarea v-model="guestForm.stance_bias" class="input-control" rows="2" placeholder="立场倾向（可选）" :disabled="isBusy"></textarea>
+          <textarea v-model="guestForm.background" class="input-control" rows="2" placeholder="背景经历" :disabled="isBusy"></textarea>
+
+          <div class="topic-row">
+            <button class="btn-secondary" :disabled="isBusy || savingGuest" @click="submitGuestForm">
+              {{ savingGuest ? '保存中...' : (editingGuestName ? '保存修改' : '新增嘉宾') }}
+            </button>
+            <button v-if="editingGuestName" class="btn-inline" :disabled="isBusy" @click="resetGuestForm">取消编辑</button>
+          </div>
+          <p class="hint-text">已选 {{ selectedGuests.length }}/{{ maxGuests }} 位嘉宾；实际生成时会使用你当前选中的嘉宾。</p>
+        </div>
+
         <button
           v-if="workflowMode === 'one-click'"
           class="btn-generate"
-          :disabled="!hasNews || isBusy"
+          :disabled="!canGenerate"
           @click="startGenerate"
         >
           <span v-if="generating" class="btn-spinner"></span>
@@ -118,7 +188,7 @@
         <template v-else>
           <button
             class="btn-secondary"
-            :disabled="!hasNews || isBusy"
+            :disabled="!canGenerate"
             @click="generateScriptPreview"
           >
             <span v-if="generatingScript" class="btn-spinner"></span>
@@ -277,10 +347,156 @@ const taskId = ref(null)
 const newsContent = ref(null)
 const workflowMode = ref('one-click')
 const scriptDraft = ref(null)
+const selectedTopic = ref('')
+const customTopic = ref('')
+const guests = ref([])
+const selectedGuests = ref([])
+const maxGuests = 3
+const loadingGuests = ref(false)
+const savingGuest = ref(false)
+const editingGuestName = ref('')
+
+function defaultGuestForm() {
+  return {
+    name: '',
+    gender: 'male',
+    age: 30,
+    mbti: '',
+    personality: '',
+    occupation: '',
+    speaking_style: '',
+    stance_bias: '',
+    voice_id: '',
+    background: ''
+  }
+}
+
+const guestForm = ref(defaultGuestForm())
 
 const hasNews = computed(() => newsContent.value !== null)
 const hasScriptDraft = computed(() => scriptDraft.value && scriptDraft.value.dialogue?.length > 0)
-const isBusy = computed(() => fetchingNews.value || generating.value || generatingScript.value || synthesizing.value)
+const effectiveTopic = computed(() => (customTopic.value || selectedTopic.value || '').trim())
+const canGenerate = computed(() => {
+  return hasNews.value
+    && !!effectiveTopic.value
+    && selectedGuests.value.length > 0
+    && selectedGuests.value.length <= maxGuests
+    && !isBusy.value
+})
+const isBusy = computed(() => {
+  return fetchingNews.value
+    || generating.value
+    || generatingScript.value
+    || synthesizing.value
+    || loadingGuests.value
+    || savingGuest.value
+})
+
+async function loadGuests() {
+  loadingGuests.value = true
+  try {
+    const res = await fetch('/api/guests')
+    const data = await res.json()
+    guests.value = Array.isArray(data) ? data : []
+    selectedGuests.value = selectedGuests.value.filter(name => guests.value.some(g => g.name === name))
+    if (!selectedGuests.value.length && guests.value.length) {
+      selectedGuests.value = [guests.value[0].name]
+    }
+  } catch (e) {
+    console.error('Failed to load guests:', e)
+  } finally {
+    loadingGuests.value = false
+  }
+}
+
+function toggleGuestSelection(name) {
+  if (selectedGuests.value.includes(name)) {
+    selectedGuests.value = selectedGuests.value.filter(item => item !== name)
+    return
+  }
+  if (selectedGuests.value.length >= maxGuests) return
+  selectedGuests.value = [...selectedGuests.value, name]
+}
+
+function startEditGuest(guest) {
+  editingGuestName.value = guest.name
+  guestForm.value = {
+    name: guest.name,
+    gender: guest.gender,
+    age: guest.age,
+    mbti: guest.mbti,
+    personality: guest.personality,
+    occupation: guest.occupation,
+    speaking_style: guest.speaking_style,
+    stance_bias: guest.stance_bias || '',
+    voice_id: guest.voice_id || '',
+    background: guest.background
+  }
+}
+
+function resetGuestForm() {
+  editingGuestName.value = ''
+  guestForm.value = defaultGuestForm()
+}
+
+async function submitGuestForm() {
+  if (!guestForm.value.name.trim()) return
+  savingGuest.value = true
+  try {
+    const method = editingGuestName.value ? 'PUT' : 'POST'
+    const url = editingGuestName.value
+      ? `/api/guests/${encodeURIComponent(editingGuestName.value)}`
+      : '/api/guests'
+    const payload = {
+      ...guestForm.value,
+      name: guestForm.value.name.trim(),
+      mbti: (guestForm.value.mbti || '').trim().toUpperCase(),
+      occupation: (guestForm.value.occupation || '').trim(),
+      personality: (guestForm.value.personality || '').trim(),
+      speaking_style: (guestForm.value.speaking_style || '').trim(),
+      stance_bias: (guestForm.value.stance_bias || '').trim(),
+      background: (guestForm.value.background || '').trim(),
+      voice_id: (guestForm.value.voice_id || '').trim()
+    }
+    const res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      throw new Error(data?.detail || '操作失败')
+    }
+    guests.value = data
+    if (!selectedGuests.value.includes(payload.name) && selectedGuests.value.length < maxGuests) {
+      selectedGuests.value = [...selectedGuests.value, payload.name]
+    }
+    selectedGuests.value = selectedGuests.value.filter(name => guests.value.some(g => g.name === name)).slice(0, maxGuests)
+    resetGuestForm()
+  } catch (e) {
+    console.error('Failed to save guest:', e)
+    alert(e.message || '保存嘉宾失败')
+  } finally {
+    savingGuest.value = false
+  }
+}
+
+async function removeGuest(name) {
+  if (!window.confirm(`确定删除嘉宾「${name}」吗？`)) return
+  try {
+    const res = await fetch(`/api/guests/${encodeURIComponent(name)}`, { method: 'DELETE' })
+    const data = await res.json()
+    if (!res.ok) {
+      throw new Error(data?.detail || '删除失败')
+    }
+    guests.value = data
+    selectedGuests.value = selectedGuests.value.filter(item => item !== name)
+    if (editingGuestName.value === name) resetGuestForm()
+  } catch (e) {
+    console.error('Failed to delete guest:', e)
+    alert(e.message || '删除嘉宾失败')
+  }
+}
 
 async function fetchEpisodes() {
   try {
@@ -301,6 +517,8 @@ async function fetchNews() {
       items: data.items || [],
       summary: data.items?.[0]?.title || data.items?.[0]?.content || '已加载最新 AI 资讯'
     }
+    selectedTopic.value = newsContent.value.items?.[0]?.title || ''
+    customTopic.value = ''
     scriptDraft.value = null
   } catch (e) {
     console.error('Failed to fetch news:', e)
@@ -310,10 +528,17 @@ async function fetchNews() {
 }
 
 async function startGenerate() {
-  if (!hasNews.value) return
+  if (!canGenerate.value) return
   generating.value = true
   try {
-    const res = await fetch('/api/generate', { method: 'POST' })
+    const res = await fetch('/api/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        topic: effectiveTopic.value,
+        selected_guests: selectedGuests.value
+      })
+    })
     const data = await res.json()
     taskId.value = data.task_id
   } catch (e) {
@@ -323,13 +548,16 @@ async function startGenerate() {
 }
 
 async function generateScriptPreview() {
-  if (!hasNews.value) return
+  if (!canGenerate.value) return
   generatingScript.value = true
   try {
     const res = await fetch('/api/script/preview', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({})
+      body: JSON.stringify({
+        topic: effectiveTopic.value,
+        selected_guests: selectedGuests.value
+      })
     })
     const data = await res.json()
     scriptDraft.value = {
@@ -403,7 +631,9 @@ function getSpeakerClass(speaker) {
   return 'guest'
 }
 
-onMounted(fetchEpisodes)
+onMounted(async () => {
+  await Promise.all([fetchEpisodes(), loadGuests()])
+})
 </script>
 
 <style scoped>
@@ -615,6 +845,99 @@ onMounted(fetchEpisodes)
   background: white;
   color: var(--color-primary);
   box-shadow: var(--shadow-sm);
+}
+
+.config-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.75rem;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+  background: #fafbff;
+}
+
+.topic-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.hint-text {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+.input-control {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  color: var(--color-text);
+  background: white;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.guest-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.guest-item {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-sm);
+  background: white;
+}
+
+.guest-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.guest-meta strong {
+  font-size: 0.85rem;
+  color: var(--color-text);
+}
+
+.guest-meta span {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+.guest-actions {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.btn-inline {
+  border: 1px solid var(--color-border);
+  background: white;
+  color: var(--color-text-secondary);
+  border-radius: var(--radius-sm);
+  padding: 4px 8px;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.btn-inline:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 /* Buttons */

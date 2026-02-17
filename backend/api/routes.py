@@ -16,6 +16,8 @@ from backend.api.schemas import (
     DialogueLineOut,
     EpisodeDetail,
     EpisodeSummary,
+    GuestProfileIn,
+    GuestProfileOut,
     GenerateRequest,
     ScriptSynthesisRequest,
     ScriptPreviewRequest,
@@ -30,6 +32,7 @@ from backend.knowledge.chroma_kb import (
 from backend.models import DetailedInfo, DialogueLine, Episode
 from backend.services.run_logger import EpisodeRunLogger
 from backend.services.news_service import get_news_service
+from backend.services.guest_pool_service import get_guest_pool_service, to_persona_config
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api")
@@ -92,10 +95,26 @@ async def debug_news(max_results: int = 10):
 async def debug_script_preview(req: ScriptPreviewRequest | None = None):
     """Run pipeline until dialogue generation (skip TTS and audio stitching)."""
     payload = req or ScriptPreviewRequest()
-    orchestrator = PodcastOrchestrator()
-    num_guests = random.randint(1, 2)
-    selected_names = random.sample(
-        list(orchestrator._guest_pool.keys()), num_guests)
+    guest_pool_service = get_guest_pool_service()
+    guest_pool = guest_pool_service.list_guests()
+    orchestrator = PodcastOrchestrator(guest_personas=guest_pool)
+
+    selected_names = [name.strip()
+                      for name in payload.selected_guests if name and name.strip()]
+    if selected_names:
+        unknown = [
+            name for name in selected_names if name not in orchestrator._guest_pool]
+        if unknown:
+            raise HTTPException(
+                status_code=400, detail=f"Unknown guests: {', '.join(unknown)}")
+        if len(selected_names) > settings.max_guests:
+            raise HTTPException(
+                status_code=400, detail=f"最多可选择{settings.max_guests}位嘉宾")
+    else:
+        num_guests = random.randint(1, 2)
+        selected_names = random.sample(
+            list(orchestrator._guest_pool.keys()), num_guests)
+
     active_guests = [orchestrator._guest_pool[name] for name in selected_names]
     speaker_voice_map = orchestrator._build_speaker_voice_map(active_guests)
 
@@ -105,13 +124,25 @@ async def debug_script_preview(req: ScriptPreviewRequest | None = None):
     if not news_items:
         raise HTTPException(status_code=502, detail="No news items retrieved")
 
-    recent_topics = orchestrator._load_recent_topics(
-        limit=20,
-    )
-    topic = await orchestrator.host.select_topic(
-        news_items,
-        recent_topics=recent_topics,
-    )
+    if payload.topic.strip():
+        selected_topic = payload.topic.strip()
+        topic = {
+            "topic": selected_topic,
+            "reason": "用户手动选择话题",
+            "search_queries": [
+                selected_topic,
+                f"{selected_topic} 最新进展",
+                f"{selected_topic} 行业争议",
+            ],
+        }
+    else:
+        recent_topics = orchestrator._load_recent_topics(
+            limit=20,
+        )
+        topic = await orchestrator.host.select_topic(
+            news_items,
+            recent_topics=recent_topics,
+        )
     search_queries = topic.get("search_queries", [])[
         : payload.max_search_queries]
 
@@ -288,18 +319,36 @@ async def synthesize_from_script(req: ScriptSynthesisRequest):
 @router.post("/generate", response_model=TaskCreatedResponse)
 async def generate_episode(req: GenerateRequest | None = None):
     """Start generating a new podcast episode in the background."""
+    payload = req or GenerateRequest()
+
+    if len(payload.selected_guests) > settings.max_guests:
+        raise HTTPException(
+            status_code=400, detail=f"最多可选择{settings.max_guests}位嘉宾")
+
+    guest_pool_service = get_guest_pool_service()
+    guest_pool = guest_pool_service.list_guests()
+    guest_names = {guest.name for guest in guest_pool}
+    unknown = [name for name in payload.selected_guests if name not in guest_names]
+    if unknown:
+        raise HTTPException(
+            status_code=400, detail=f"Unknown guests: {', '.join(unknown)}")
+
     task_id = f"task_{len(_tasks) + 1}"
     _tasks[task_id] = {"status": "started",
                        "stage": "initializing", "detail": "", "episode_id": None}
 
     async def _run():
-        orchestrator = PodcastOrchestrator()
+        orchestrator = PodcastOrchestrator(guest_personas=guest_pool)
 
         async def _progress(stage: str, detail: str):
             _tasks[task_id].update({"stage": stage, "detail": detail})
 
         try:
-            episode = await orchestrator.generate_episode(progress=_progress)
+            episode = await orchestrator.generate_episode(
+                progress=_progress,
+                topic=payload.topic,
+                selected_guest_names=payload.selected_guests,
+            )
             _tasks[task_id].update({
                 "status": "completed",
                 "stage": "done",
@@ -316,6 +365,48 @@ async def generate_episode(req: GenerateRequest | None = None):
 
     asyncio.create_task(_run())
     return TaskCreatedResponse(task_id=task_id)
+
+
+# ---------------------------------------------------------------------------
+# Guest pool management endpoints
+# ---------------------------------------------------------------------------
+
+@router.get("/guests", response_model=list[GuestProfileOut])
+async def list_guest_pool():
+    service = get_guest_pool_service()
+    guests = service.list_guests()
+    return [GuestProfileOut(**guest.model_dump(mode="json")) for guest in guests]
+
+
+@router.post("/guests", response_model=list[GuestProfileOut])
+async def create_guest(guest: GuestProfileIn):
+    service = get_guest_pool_service()
+    try:
+        guests = service.add_guest(to_persona_config(guest.model_dump()))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return [GuestProfileOut(**item.model_dump(mode="json")) for item in guests]
+
+
+@router.put("/guests/{guest_name}", response_model=list[GuestProfileOut])
+async def update_guest(guest_name: str, guest: GuestProfileIn):
+    service = get_guest_pool_service()
+    try:
+        guests = service.update_guest(
+            guest_name, to_persona_config(guest.model_dump()))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return [GuestProfileOut(**item.model_dump(mode="json")) for item in guests]
+
+
+@router.delete("/guests/{guest_name}", response_model=list[GuestProfileOut])
+async def delete_guest(guest_name: str):
+    service = get_guest_pool_service()
+    try:
+        guests = service.delete_guest(guest_name)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return [GuestProfileOut(**item.model_dump(mode="json")) for item in guests]
 
 
 # ---------------------------------------------------------------------------

@@ -11,14 +11,44 @@ from pydantic import BaseModel, Field
 
 class GenerateRequest(BaseModel):
     """Request body for triggering a new episode generation."""
-    # MVP: no extra params needed — future: topic hints, guest selection, etc.
-    pass
+    topic: str = ""
+    selected_guests: list[str] = Field(default_factory=list, max_length=3)
 
 
 class ScriptPreviewRequest(BaseModel):
     """Request body for previewing script generation without TTS/audio."""
     max_news_results: int = Field(default=6, ge=3, le=10)
     max_search_queries: int = Field(default=3, ge=1, le=5)
+    topic: str = ""
+    selected_guests: list[str] = Field(default_factory=list, max_length=3)
+
+
+class GuestProfileIn(BaseModel):
+    """User-defined guest profile input."""
+    name: str
+    gender: str
+    age: int = Field(ge=18, le=90)
+    mbti: str
+    personality: str
+    occupation: str
+    speaking_style: str
+    stance_bias: str = ""
+    voice_id: str = ""
+    background: str
+
+
+class GuestProfileOut(BaseModel):
+    """Guest profile payload returned to frontend."""
+    name: str
+    gender: str
+    age: int
+    mbti: str
+    personality: str
+    occupation: str
+    speaking_style: str
+    stance_bias: str = ""
+    voice_id: str = ""
+    background: str
 
 
 class ScriptLineIn(BaseModel):

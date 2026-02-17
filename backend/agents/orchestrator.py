@@ -25,7 +25,7 @@ from backend.knowledge.chroma_kb import (
     KNOWLEDGE_SCOPE_GLOBAL,
 )
 from backend.logging_config import get_episode_file_handler
-from backend.models import DetailedInfo, DialogueLine, Episode, EpisodePlan, NewsItem
+from backend.models import DetailedInfo, DialogueLine, Episode, EpisodePlan, NewsItem, PersonaConfig
 from backend.services.audio_service import AudioService, audio_service
 from backend.services.llm_service import LLMService, get_llm_service
 from backend.services.news_service import NewsService, get_news_service
@@ -62,6 +62,7 @@ class PodcastOrchestrator:
         news: NewsService | None = None,
         tts: TTSService | None = None,
         audio: AudioService | None = None,
+        guest_personas: list[PersonaConfig] | None = None,
     ) -> None:
         self._llm = llm or get_llm_service()
         self._news = news or get_news_service()
@@ -70,8 +71,9 @@ class PodcastOrchestrator:
 
         self.host = HostAgent(self._llm)
         # We'll select guest instances per episode run to control guest count
+        guest_configs = guest_personas or GUEST_PERSONAS
         self._guest_pool = {p.name: GuestAgent(
-            p, self._llm) for p in GUEST_PERSONAS}
+            p, self._llm) for p in guest_configs}
         self._app = self._build_graph().compile()
 
     def _build_graph(self) -> StateGraph:
@@ -99,16 +101,35 @@ class PodcastOrchestrator:
         graph.add_edge("save_episode", END)
         return graph
 
-    async def generate_episode(self, progress: ProgressCallback = None) -> Episode:
-        """Run the complete podcast generation pipeline via LangGraph."""
-        # 1. Select 1-2 guests randomly from the pool
+    def _build_active_guests(self, selected_guest_names: list[str] | None = None) -> list[GuestAgent]:
+        names = [name.strip() for name in (selected_guest_names or [])
+                 if name and name.strip()]
+        if names:
+            unknown = [name for name in names if name not in self._guest_pool]
+            if unknown:
+                raise ValueError(f"Unknown guests: {', '.join(unknown)}")
+            return [self._guest_pool[name] for name in names]
+
         num_guests = random.randint(1, 2)
         selected_names = random.sample(
             list(self._guest_pool.keys()), num_guests)
-        active_guests = [self._guest_pool[name] for name in selected_names]
+        return [self._guest_pool[name] for name in selected_names]
+
+    async def generate_episode(
+        self,
+        progress: ProgressCallback = None,
+        *,
+        topic: str = "",
+        selected_guest_names: list[str] | None = None,
+    ) -> Episode:
+        """Run the complete podcast generation pipeline via LangGraph."""
+        active_guests = self._build_active_guests(selected_guest_names)
+        selected_names = [guest.persona.name for guest in active_guests]
         speaker_voice_map = self._build_speaker_voice_map(active_guests)
 
-        episode = Episode(guests=selected_names)
+        normalized_topic = (topic or "").strip()
+        episode = Episode(guests=selected_names,
+                          topic=normalized_topic, title=normalized_topic)
         output_dir = settings.ensure_output_dir()
         run_log = EpisodeRunLogger(output_dir / "logs" / f"{episode.id}.jsonl")
         episode.generation_log_path = str(run_log.log_path)
@@ -127,7 +148,7 @@ class PodcastOrchestrator:
             final_state = await self._app.ainvoke(
                 {
                     "episode": episode,
-                    "topic": {},
+                    "topic": {"topic": normalized_topic} if normalized_topic else {},
                     "detailed_info": [],
                     "dialogue": [],
                     "audio_segments": [],
@@ -198,6 +219,26 @@ class PodcastOrchestrator:
 
     async def _node_select_topic(self, state: OrchestratorState) -> OrchestratorState:
         episode = state["episode"]
+
+        if episode.topic.strip():
+            user_topic = episode.topic.strip()
+            topic = {
+                "topic": user_topic,
+                "reason": "用户手动选择话题",
+                "search_queries": [
+                    user_topic,
+                    f"{user_topic} 最新进展",
+                    f"{user_topic} 行业争议",
+                ],
+            }
+            await self._emit_progress(
+                state,
+                "topic",
+                f"使用用户选择话题: {user_topic}",
+                payload=topic,
+            )
+            return {"episode": episode, "topic": topic}
+
         await self._emit_progress(state, "topic", "主持人正在选题…")
         recent_topics = self._load_recent_topics(
             limit=20,
@@ -509,7 +550,7 @@ class PodcastOrchestrator:
         opening_line = await self.host.generate_line(
             shared_context,
             f"现在是节目开场。请紧接刚才的开场白，用一种轻松自然的方式带出今天的话题「{plan.topic}」，"
-            f"顺便介绍三位嘉宾：{'、'.join(guest_names)}。"
+            f"顺便介绍{len(guest_names)}位嘉宾：{'、'.join(guest_names)}。"
             f"开场要求：紧接『AI圆桌派』的基调；别搞『欢迎收听』模板；可用反直觉事实、尖锐问题或生活化场景做钩子；"
             f"可轻微表达你的立场或困惑。{opening_hint}",
         )
@@ -708,9 +749,7 @@ class PodcastOrchestrator:
 
         try:
             speaker_voice_map = self._build_speaker_voice_map(
-                [self._guest_pool[name]
-                    for name in guests if name in self._guest_pool]
-            )
+                self._build_active_guests(guests))
             for line in episode.dialogue:
                 if line.speaker in speaker_voice_map:
                     line.voice_id = speaker_voice_map[line.speaker]
@@ -722,7 +761,8 @@ class PodcastOrchestrator:
             await _emit("audio", "正在实时合成语音…")
             audio_segments = await self._synthesize_dialogue_segments(
                 episode.dialogue,
-                progress=lambda detail, payload: _emit("audio", detail, payload),
+                progress=lambda detail, payload: _emit(
+                    "audio", detail, payload),
                 run_logger=run_log,
             )
 
@@ -767,7 +807,8 @@ class PodcastOrchestrator:
             return []
 
         semaphore = asyncio.Semaphore(max_concurrency)
-        ordered_segments: list[tuple[bytes, float] | None] = [None] * len(dialogue)
+        ordered_segments: list[tuple[bytes, float]
+                               | None] = [None] * len(dialogue)
 
         async def _worker(index: int, line: DialogueLine) -> tuple[int, DialogueLine, bytes]:
             async with semaphore:
@@ -830,7 +871,8 @@ class PodcastOrchestrator:
             if not pool:
                 voice_map[guest.persona.name] = guest.persona.voice_id
                 continue
-            available = [vid for vid in pool if vid not in used_by_gender[guest.persona.gender]]
+            available = [
+                vid for vid in pool if vid not in used_by_gender[guest.persona.gender]]
             chosen = random.choice(available or pool)
             used_by_gender[guest.persona.gender].add(chosen)
             voice_map[guest.persona.name] = chosen
