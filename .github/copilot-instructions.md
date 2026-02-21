@@ -37,10 +37,12 @@ pytest tests/
 ## Code Conventions
 
 **Singleton services** — never instantiate directly; use factory functions:
+
 ```python
 from backend.services.llm_service import get_llm_service
 llm = get_llm_service()
 ```
+
 Same pattern for `TTSService`, `NewsService`, `GuestPoolService`.
 
 **LLM outputs are always JSON** — ask the LLM for raw JSON (no markdown fences), parse with `json.loads()` after stripping fences, fall back gracefully. See `HostAgent.select_topic()` in [`backend/agents/host.py`](../backend/agents/host.py).
@@ -63,12 +65,12 @@ All models in [`backend/models.py`](../backend/models.py) use `pydantic.BaseMode
 
 ## Integration Points
 
-| Service | Config key | Notes |
-|---|---|---|
-| LLM | `llm_base_url` (DeepSeek), `llm_api_key` | OpenAI-compatible SDK; model `deepseek-chat` |
-| TTS | `minimax_api_key`, `minimax_group_id` | HTTP POST to MiniMax T2A v2; response is hex-encoded audio |
-| News | `tavily_api_key` | `tavily-python` client |
-| RAG | ChromaDB local | Persisted at `data/chromadb/`; collections: `BACKGROUND_MATERIAL`, `KNOWLEDGE_SCOPE_GLOBAL` |
+| Service | Config key                               | Notes                                                                                       |
+| ------- | ---------------------------------------- | ------------------------------------------------------------------------------------------- |
+| LLM     | `llm_base_url` (DeepSeek), `llm_api_key` | OpenAI-compatible SDK; model `deepseek-chat`                                                |
+| TTS     | `minimax_api_key`, `minimax_group_id`    | HTTP POST to MiniMax T2A v2; response is hex-encoded audio                                  |
+| News    | `tavily_api_key`                         | `tavily-python` client                                                                      |
+| RAG     | ChromaDB local                           | Persisted at `data/chromadb/`; collections: `BACKGROUND_MATERIAL`, `KNOWLEDGE_SCOPE_GLOBAL` |
 
 **SSE progress**: `GET /api/status/{task_id}` streams `text/event-stream`; set `Cache-Control: no-cache` and `X-Accel-Buffering: no` on the response.
 
