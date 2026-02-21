@@ -38,7 +38,7 @@
             <div class="settings-section">
               <div class="section-label">
                 <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8m-4-4v4"/></svg>
-                LLM 配置（DeepSeek / OpenAI 兼容）
+                LLM 配置
               </div>
               <div class="field-group">
                 <div class="field">
@@ -51,7 +51,7 @@
                     <input
                       v-model="form.llm_api_key"
                       :type="showKeys.llm ? 'text' : 'password'"
-                      placeholder="输入新的 API Key（留空保持不变）"
+                      placeholder="设置新 Key (留空保持不变)"
                       class="key-input"
                       autocomplete="new-password"
                     />
@@ -60,7 +60,7 @@
                       <svg v-else viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                     </button>
                   </div>
-                  <span v-if="isMasked(originals.llm_api_key)" class="field-hint">已设置（**** 表示已保存，输入新值可更新）</span>
+                  <span v-if="isMasked(originals.llm_api_key)" class="field-hint">已设置 (输入新值可更新)</span>
                 </div>
                 <div class="field">
                   <label>模型名称</label>
@@ -82,7 +82,7 @@
                     <input
                       v-model="form.tavily_api_key"
                       :type="showKeys.tavily ? 'text' : 'password'"
-                      placeholder="输入新的 API Key（留空保持不变）"
+                      placeholder="设置新 Key (留空保持不变)"
                       class="key-input"
                       autocomplete="new-password"
                     />
@@ -91,7 +91,7 @@
                       <svg v-else viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                     </button>
                   </div>
-                  <span v-if="isMasked(originals.tavily_api_key)" class="field-hint">已设置（输入新值可更新）</span>
+                  <span v-if="isMasked(originals.tavily_api_key)" class="field-hint">已设置 (输入新值可更新)</span>
                 </div>
               </div>
             </div>
@@ -109,7 +109,7 @@
                     <input
                       v-model="form.minimax_api_key"
                       :type="showKeys.minimax ? 'text' : 'password'"
-                      placeholder="输入新的 API Key（留空保持不变）"
+                      placeholder="设置新 Key (留空保持不变)"
                       class="key-input"
                       autocomplete="new-password"
                     />
@@ -118,7 +118,7 @@
                       <svg v-else viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                     </button>
                   </div>
-                  <span v-if="isMasked(originals.minimax_api_key)" class="field-hint">已设置（输入新值可更新）</span>
+                  <span v-if="isMasked(originals.minimax_api_key)" class="field-hint">已设置 (输入新值可更新)</span>
                 </div>
                 <div class="field">
                   <label>TTS 模型</label>
@@ -280,13 +280,14 @@ watch(() => props.modelValue, (val) => {
   top: 0;
   right: 0;
   bottom: 0;
-  width: 100%;
-  max-width: 440px;
+  width: 520px;
+  max-width: 100%;
   background: linear-gradient(180deg, var(--c-bg) 0%, var(--c-bg-warm) 100%);
   z-index: 1001;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  box-shadow: -10px 0 30px rgba(45, 27, 14, 0.1);
 }
 
 /* ── Header ── */
@@ -294,7 +295,7 @@ watch(() => props.modelValue, (val) => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1.25rem 1.5rem;
+  padding: 1rem 1.25rem;
   background: var(--c-surface);
   border-bottom: 2px solid var(--c-border);
   box-shadow: 0 1px 4px rgba(45, 27, 14, 0.06);
@@ -358,10 +359,28 @@ watch(() => props.modelValue, (val) => {
 .settings-content {
   flex: 1;
   overflow-y: auto;
-  padding: 1.25rem 1.5rem;
+  padding: 1.25rem 1.25rem 2.5rem 1.25rem;
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
+  gap: 1.5rem;
+  scroll-behavior: smooth;
+}
+
+.settings-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.settings-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.settings-content::-webkit-scrollbar-thumb {
+  background: var(--c-border);
+  border-radius: 10px;
+}
+
+.settings-content::-webkit-scrollbar-thumb:hover {
+  background: var(--c-text-3);
 }
 
 .settings-loading {
@@ -387,24 +406,22 @@ watch(() => props.modelValue, (val) => {
 /* ── Section ── */
 .settings-section {
   background: var(--c-surface);
-  border-radius: var(--r-lg);
+  border-radius: var(--r-md);
   border: 2px solid var(--c-border);
-  overflow: hidden;
   box-shadow: var(--shadow-card);
+  flex-shrink: 0;
 }
 
 .section-label {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   padding: 10px 14px;
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--c-text-2);
-  background: var(--c-bg);
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--c-text-1);
+  background: var(--c-bg-warm);
   border-bottom: 2px solid var(--c-border);
-  flex-wrap: wrap;
-  row-gap: 4px;
 }
 
 .section-label svg {
@@ -412,22 +429,24 @@ watch(() => props.modelValue, (val) => {
 }
 
 .field-group {
-  padding: 12px 14px;
+  padding: 14px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 1rem;
 }
 
 .field {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 6px;
 }
 
 .field label {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--c-text-1);
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--c-text-2);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
 }
 
 .field input {
@@ -485,9 +504,12 @@ watch(() => props.modelValue, (val) => {
 }
 
 .field-hint {
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   color: var(--c-text-3);
   font-style: italic;
+  line-height: 1.2;
+  word-break: break-all;
+  margin-top: 2px;
 }
 
 /* ── Notice ── */
@@ -524,7 +546,7 @@ watch(() => props.modelValue, (val) => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1rem 1.5rem;
+  padding: 0.85rem 1rem;
   background: var(--c-surface);
   border-top: 2px solid var(--c-border);
   flex-shrink: 0;
@@ -539,11 +561,12 @@ watch(() => props.modelValue, (val) => {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 8px 14px;
+  padding: 6px 10px;
   border: 2px solid var(--c-border);
   border-radius: var(--r-full);
   background: var(--c-surface);
-  font-size: 0.8rem;
+  font-size: 0.72rem;
+  font-weight: 600;
   color: var(--c-text-2);
   cursor: pointer;
   transition: all var(--dur-fast) ease;
@@ -561,11 +584,11 @@ watch(() => props.modelValue, (val) => {
 }
 
 .btn-cancel {
-  padding: 8px 16px;
+  padding: 6px 12px;
   border: 2px solid var(--c-border);
   border-radius: var(--r-full);
   background: var(--c-surface);
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   color: var(--c-text-2);
   cursor: pointer;
   transition: all var(--dur-fast) ease;
@@ -580,11 +603,11 @@ watch(() => props.modelValue, (val) => {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 18px;
+  padding: 6px 16px;
   border: none;
   border-radius: var(--r-full);
   background: linear-gradient(135deg, var(--c-primary) 0%, var(--c-primary-hover) 100%);
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   font-weight: 600;
   color: white;
   cursor: pointer;
