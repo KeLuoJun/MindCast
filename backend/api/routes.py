@@ -668,6 +668,51 @@ async def get_episode(episode_id: str):
 
 
 # ---------------------------------------------------------------------------
+# DELETE /api/episodes/{id} — delete episode and related artifacts
+# ---------------------------------------------------------------------------
+
+@router.delete("/episodes/{episode_id}")
+async def delete_episode(episode_id: str):
+    """Delete an episode JSON, audio file, and log files if they exist."""
+    json_path = settings.output_dir / f"{episode_id}.json"
+    if not json_path.exists():
+        raise HTTPException(status_code=404, detail="Episode not found")
+
+    audio_path: Path | None = None
+    try:
+        episode = Episode.load_json(json_path)
+        if episode.audio_path:
+            audio_path = Path(episode.audio_path)
+    except Exception as exc:
+        logger.warning(
+            "Failed to parse episode %s before deletion: %s", episode_id, exc)
+
+    removed_files: list[str] = []
+
+    def _safe_unlink(path: Path):
+        if not path.exists() or not path.is_file():
+            return
+        path.unlink()
+        removed_files.append(path.name)
+
+    _safe_unlink(json_path)
+
+    if audio_path is not None:
+        _safe_unlink(audio_path)
+
+    logs_dir = settings.output_dir / "logs"
+    _safe_unlink(logs_dir / f"{episode_id}.jsonl")
+    _safe_unlink(logs_dir / f"{episode_id}.debug.jsonl")
+
+    return {
+        "status": "ok",
+        "episode_id": episode_id,
+        "removed_files": removed_files,
+        "message": "节目已删除",
+    }
+
+
+# ---------------------------------------------------------------------------
 # GET /api/episodes/{id}/audio — serve audio file
 # ---------------------------------------------------------------------------
 

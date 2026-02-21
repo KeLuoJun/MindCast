@@ -1,5 +1,5 @@
 <template>
-  <div class="player" v-if="episodeId">
+  <div class="player" :class="{ 'is-minimal': minimal }" v-if="episodeId">
     <audio ref="audioEl" :src="`/api/episodes/${episodeId}/audio`" preload="metadata" />
     <div class="player-wrapper">
       <div class="player-main">
@@ -42,7 +42,10 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
 
-const props = defineProps({ episodeId: String })
+const props = defineProps({
+  episodeId: String,
+  minimal: { type: Boolean, default: false }
+})
 const audioEl = ref(null)
 const playing = ref(false)
 const progress = ref(0)
@@ -93,13 +96,40 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.player {
-  background: white;
-  border-radius: 20px;
-  padding: 1.5rem 2rem;
-  margin: 2rem 0;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
-  border: 1px solid #e5e7eb;
+.player.is-minimal {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  margin: 0;
+}
+
+.player.is-minimal .btn-control {
+  width: 42px;
+  height: 42px;
+}
+
+.player.is-minimal .btn-control svg {
+  width: 18px;
+  height: 18px;
+}
+
+.player.is-minimal .btn-play {
+  width: 56px;
+  height: 56px;
+}
+
+.player.is-minimal .btn-play svg {
+  width: 24px;
+  height: 24px;
+}
+
+.player.is-minimal .player-wrapper {
+  gap: 0.8rem;
+}
+
+.player.is-minimal .progress-container {
+  margin-top: 0.2rem;
 }
 
 .player-wrapper {
@@ -119,19 +149,20 @@ onUnmounted(() => {
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  background: #f3f4f6;
-  border: none;
+  background: var(--c-bg);
+  border: 2px solid var(--c-border);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #6b7280;
-  transition: all 0.2s;
+  color: var(--c-text-3);
+  transition: all var(--dur-normal) var(--ease);
 }
 
 .btn-control:hover {
-  background: #e5e7eb;
-  color: #374151;
+  background: var(--c-primary-soft);
+  border-color: var(--c-primary);
+  color: var(--c-primary);
   transform: scale(1.05);
 }
 
@@ -142,14 +173,18 @@ onUnmounted(() => {
 .btn-play {
   width: 64px;
   height: 64px;
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  background: linear-gradient(135deg, var(--c-primary) 0%, #FF8F5F 100%);
+  border: none;
   color: white;
-  box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
+  box-shadow: 0 6px 20px rgba(255, 107, 53, 0.35);
 }
 
 .btn-play:hover {
-  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
-  box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
+  background: linear-gradient(135deg, var(--c-primary-hover) 0%, var(--c-primary) 100%);
+  box-shadow: 0 8px 28px rgba(255, 107, 53, 0.45);
+  border: none;
+  color: white;
+  transform: scale(1.08);
 }
 
 .progress-container {
@@ -159,11 +194,12 @@ onUnmounted(() => {
 }
 
 .time-display {
-  font-size: 0.85rem;
-  color: #9ca3af;
-  font-weight: 500;
+  font-size: 0.82rem;
+  color: var(--c-text-3);
+  font-weight: 600;
   min-width: 45px;
   text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 
 .progress-bar {
@@ -181,14 +217,14 @@ onUnmounted(() => {
   left: 0;
   right: 0;
   height: 100%;
-  background: #e5e7eb;
-  border-radius: 4px;
+  background: var(--c-border);
+  border-radius: var(--r-full);
 }
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #6366f1 0%, #8b5cf6 50%, #a855f7 100%);
-  border-radius: 4px;
+  background: linear-gradient(90deg, var(--c-primary) 0%, var(--c-yellow) 100%);
+  border-radius: var(--r-full);
   transition: width 0.1s;
   position: relative;
   min-width: 8px;
@@ -203,11 +239,12 @@ onUnmounted(() => {
   height: 16px;
   background: white;
   border-radius: 50%;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  border: 3px solid #6366f1;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  border: 3px solid var(--c-primary);
+  transition: transform var(--dur-fast) var(--ease);
 }
 
 .progress-bar:hover .progress-thumb {
-  transform: translateY(-50%) scale(1.2);
+  transform: translateY(-50%) scale(1.25);
 }
 </style>

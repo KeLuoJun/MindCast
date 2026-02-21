@@ -93,8 +93,23 @@
     <!-- ────────── Episodes ────────── -->
     <section class="episodes" v-show="!store.showNewEpisode">
       <div class="section-title">
-        <h2>往期节目</h2>
-        <span class="section-count" v-if="episodes.length">{{ episodes.length }}期</span>
+        <div class="section-title-main">
+          <h2>往期节目</h2>
+          <span class="section-count" v-if="episodes.length">{{ episodes.length }}期</span>
+        </div>
+        <div v-if="episodes.length" class="section-actions">
+          <button class="btn-manage" @click="toggleManageMode">
+            {{ manageMode ? '完成管理' : '管理节目' }}
+          </button>
+          <template v-if="manageMode">
+            <button class="btn-subtle" @click="toggleSelectAll">
+              {{ allSelected ? '取消全选' : '全选' }}
+            </button>
+            <button class="btn-danger" :disabled="!selectedEpisodeIds.length || deleting" @click="openConfirmDelete('batch', selectedEpisodeIds.length)">
+              {{ deleting ? '删除中...' : `删除所选 (${selectedEpisodeIds.length})` }}
+            </button>
+          </template>
+        </div>
       </div>
       
       <div v-if="episodes.length === 0" class="empty-block">
@@ -111,10 +126,23 @@
           v-for="(ep, idx) in episodes"
           :key="ep.id"
           class="ep-card"
-          @click="$router.push(`/episode/${ep.id}`)"
+          :class="{ 'is-managing': manageMode, 'is-selected': isEpisodeSelected(ep.id) }"
+          @click="handleEpisodeClick(ep.id)"
         >
           <div class="ep-card-top">
-            <span class="ep-num">#{{ episodes.length - idx }}</span>
+            <div class="ep-card-top-left">
+              <span
+                v-if="manageMode"
+                class="ep-checkbox"
+                :class="{ checked: isEpisodeSelected(ep.id) }"
+                @click.stop="toggleEpisodeSelection(ep.id)"
+              >
+                <svg v-if="isEpisodeSelected(ep.id)" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="3">
+                  <polyline points="20,6 9,17 4,12"/>
+                </svg>
+              </span>
+              <span class="ep-num">#{{ episodes.length - idx }}</span>
+            </div>
             <span class="ep-date">{{ formatDate(ep.created_at) }}</span>
           </div>
           <h3 class="ep-title">{{ ep.title }}</h3>
@@ -123,12 +151,24 @@
             <div class="ep-tags">
               <span v-for="g in ep.guests" :key="g" class="ep-tag">{{ g }}</span>
             </div>
-            <div class="ep-info">
-              <span v-if="ep.word_count">{{ ep.word_count }}字</span>
-              <span v-if="ep.duration_seconds">{{ formatDuration(ep.duration_seconds) }}</span>
+            <div class="ep-bottom-right">
+              <template v-if="!manageMode">
+                <div class="ep-info">
+                  <span v-if="ep.word_count">{{ ep.word_count }}字</span>
+                  <span v-if="ep.duration_seconds">{{ formatDuration(ep.duration_seconds) }}</span>
+                </div>
+              </template>
+              <button
+                v-if="manageMode"
+                class="ep-delete-btn"
+                :disabled="deleting"
+                @click.stop="openConfirmDelete('single', ep.id)"
+              >
+                删除
+              </button>
             </div>
           </div>
-          <div class="ep-play-hint">
+          <div v-if="!manageMode" class="ep-play-hint">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
           </div>
         </div>
@@ -144,6 +184,33 @@
       @save="handleSaveGuest"
       @remove="handleRemoveGuest"
     />
+
+    <!-- ────────── Confirm Delete Dialog ────────── -->
+    <Teleport to="body">
+      <transition name="dialog-fade">
+        <div v-if="confirmDialog.show" class="dialog-overlay" @click.self="closeConfirmDialog">
+          <div class="dialog-content">
+            <div class="dialog-icon">
+              <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2.5">
+                <polyline points="3,6 5,6 21,6"/>
+                <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+              </svg>
+            </div>
+            <h4 class="dialog-title">{{ confirmDialog.mode === 'single' ? '删除节目' : '批量删除' }}</h4>
+            <p v-if="confirmDialog.mode === 'single'" class="dialog-body">
+              确认删除该期节目吗？操作后数据将从服务器彻底移除，且<strong>不可恢复</strong>。
+            </p>
+            <p v-else class="dialog-body">
+              确定移除选中的 <strong>{{ confirmDialog.count }}</strong> 期节目吗？此操作将永久删除相关文件且<strong>无法撤销</strong>。
+            </p>
+            <div class="dialog-actions">
+              <button class="dialog-btn cancel" @click="closeConfirmDialog">取消</button>
+              <button class="dialog-btn confirm" @click="handleConfirmDelete">确认删除</button>
+            </div>
+          </div>
+        </div>
+      </transition>
+    </Teleport>
   </div>
 </template>
 
@@ -153,7 +220,7 @@
  */
 defineOptions({ name: 'Home' })
 
-import { ref, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useWorkflowStore } from '../stores/workflow'
 import WorkflowWizard from '../components/WorkflowWizard.vue'
@@ -164,14 +231,125 @@ const router = useRouter()
 const workflowRef = ref(null)
 const episodes = ref([])
 const newEpisode = ref(null)
+const manageMode = ref(false)
+const selectedEpisodeIds = ref([])
+const deleting = ref(false)
+const confirmDialog = ref({ show: false, mode: 'single', episodeId: null, count: 0 })
+
+const allSelected = computed(
+  () => episodes.value.length > 0 && selectedEpisodeIds.value.length === episodes.value.length
+)
 
 // ── Fetch episodes ──
 async function fetchEpisodes() {
   try {
     const res = await fetch('/api/episodes')
     episodes.value = await res.json()
+    const validIds = new Set(episodes.value.map(ep => ep.id))
+    selectedEpisodeIds.value = selectedEpisodeIds.value.filter(id => validIds.has(id))
+    if (episodes.value.length === 0) {
+      manageMode.value = false
+    }
   } catch (e) {
     console.error('Failed to fetch episodes:', e)
+  }
+}
+
+function toggleManageMode() {
+  manageMode.value = !manageMode.value
+  if (!manageMode.value) {
+    selectedEpisodeIds.value = []
+  }
+}
+
+function handleEpisodeClick(episodeId) {
+  if (manageMode.value) {
+    toggleEpisodeSelection(episodeId)
+    return
+  }
+  router.push(`/episode/${episodeId}`)
+}
+
+function isEpisodeSelected(episodeId) {
+  return selectedEpisodeIds.value.includes(episodeId)
+}
+
+function toggleEpisodeSelection(episodeId) {
+  if (!manageMode.value) return
+  if (isEpisodeSelected(episodeId)) {
+    selectedEpisodeIds.value = selectedEpisodeIds.value.filter(id => id !== episodeId)
+    return
+  }
+  selectedEpisodeIds.value = [...selectedEpisodeIds.value, episodeId]
+}
+
+function toggleSelectAll() {
+  if (allSelected.value) {
+    selectedEpisodeIds.value = []
+    return
+  }
+  selectedEpisodeIds.value = episodes.value.map(ep => ep.id)
+}
+
+function openConfirmDelete(mode, idOrCount) {
+  if (mode === 'single') {
+    confirmDialog.value = { show: true, mode: 'single', episodeId: idOrCount, count: 1 }
+  } else {
+    confirmDialog.value = { show: true, mode: 'batch', episodeId: null, count: idOrCount }
+  }
+}
+
+function closeConfirmDialog() {
+  confirmDialog.value.show = false
+}
+
+async function handleConfirmDelete() {
+  const { mode, episodeId } = confirmDialog.value
+  closeConfirmDialog()
+  
+  if (mode === 'single') {
+    await executeDeleteSingle(episodeId)
+  } else {
+    await executeDeleteBatch()
+  }
+}
+
+async function executeDeleteSingle(episodeId) {
+  if (deleting.value) return
+  deleting.value = true
+  try {
+    const res = await fetch(`/api/episodes/${episodeId}`, { method: 'DELETE' })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      throw new Error(data?.detail || data?.message || '删除失败')
+    }
+    await fetchEpisodes()
+  } catch (e) {
+    alert(e.message || '删除节目失败')
+  } finally {
+    deleting.value = false
+  }
+}
+
+async function executeDeleteBatch() {
+  if (!selectedEpisodeIds.value.length || deleting.value) return
+  deleting.value = true
+  const ids = [...selectedEpisodeIds.value]
+  try {
+    for (const id of ids) {
+      const res = await fetch(`/api/episodes/${id}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data?.detail || data?.message || `删除节目 ${id} 失败`)
+      }
+    }
+    selectedEpisodeIds.value = []
+    manageMode.value = false
+    await fetchEpisodes()
+  } catch (e) {
+    alert(e.message || '批量删除失败')
+  } finally {
+    deleting.value = false
   }
 }
 
@@ -255,69 +433,87 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 2rem;
-  background: linear-gradient(135deg, var(--c-primary-soft) 0%, #f0e7ff 60%, #fef3e0 100%);
-  border: 1px solid var(--c-border);
-  border-radius: var(--r-xl);
-  padding: 2.5rem 3rem;
+  gap: 2.5rem;
+  background: linear-gradient(135deg, #FFF5ED 0%, #FFE4CC 40%, #FFDAB9 100%);
+  border: 2px solid var(--c-primary-muted);
+  border-radius: var(--r-2xl);
+  padding: 3rem 3.5rem;
   overflow: hidden;
+}
+.showcase::before {
+  content: '';
+  position: absolute;
+  top: -60px;
+  right: -40px;
+  width: 200px;
+  height: 200px;
+  background: var(--c-primary);
+  opacity: 0.06;
+  border-radius: 50%;
 }
 .showcase-inner { position: relative; z-index: 1; flex: 1; min-width: 0; }
 .showcase-badge {
-  display: inline-flex; align-items: center; gap: 6px;
+  display: inline-flex; align-items: center; gap: 8px;
   background: var(--c-primary); color: #fff;
-  padding: 5px 14px; border-radius: var(--r-full);
-  font-size: 0.78rem; font-weight: 600; margin-bottom: 1rem;
+  padding: 6px 18px; border-radius: var(--r-full);
+  font-size: .8rem; font-weight: 700; margin-bottom: 1.25rem;
+  box-shadow: 0 3px 10px rgba(255, 107, 53, 0.3);
 }
-.badge-dot { width: 6px; height: 6px; background: #fff; border-radius: 50%; animation: pulse 2s infinite; }
-@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
-.showcase-title { font-size: 1.5rem; font-weight: 700; color: var(--c-text-1); margin-bottom: .5rem; }
+.badge-dot { width: 7px; height: 7px; background: #fff; border-radius: 50%; animation: pulse 2s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+.showcase-title {
+  font-size: 1.8rem; font-weight: 800; color: var(--c-text-1);
+  margin-bottom: .6rem; letter-spacing: -0.02em;
+}
 .showcase-summary {
-  color: var(--c-text-2); font-size: .95rem; line-height: 1.6;
+  color: var(--c-text-2); font-size: 1rem; line-height: 1.7;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
-  margin-bottom: 1rem;
+  margin-bottom: 1.25rem;
 }
-.showcase-meta { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: 1.5rem; }
+.showcase-meta { display: flex; flex-wrap: wrap; gap: .6rem; margin-bottom: 1.75rem; }
 .meta-tag {
-  padding: 3px 10px; border-radius: var(--r-full);
-  background: rgba(91,91,214,.1); color: var(--c-primary);
-  font-size: .75rem; font-weight: 600;
+  padding: 5px 14px; border-radius: var(--r-full);
+  background: var(--c-accent-soft); color: var(--c-accent);
+  font-size: .78rem; font-weight: 700;
+  border: 1px solid rgba(64, 70, 227, 0.12);
 }
-.meta-info { font-size: .75rem; color: var(--c-text-3); padding: 3px 0; }
-.showcase-actions { display: flex; gap: .75rem; }
+.meta-info { font-size: .78rem; color: var(--c-text-3); padding: 5px 0; }
+.showcase-actions { display: flex; gap: 1rem; }
 .btn-primary {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 10px 24px; border-radius: var(--r-md);
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 12px 28px; border-radius: var(--r-full);
   background: var(--c-primary); color: #fff;
-  font-weight: 600; font-size: .88rem; border: none; cursor: pointer;
-  transition: background var(--dur-fast) var(--ease);
+  font-weight: 700; font-size: .9rem; border: none; cursor: pointer;
+  box-shadow: 0 4px 14px rgba(255, 107, 53, 0.3);
+  transition: all var(--dur-normal) var(--ease-bounce);
 }
-.btn-primary:hover { background: var(--c-primary-hover); }
+.btn-primary:hover { background: var(--c-primary-hover); transform: translateY(-2px); box-shadow: 0 6px 20px rgba(255, 107, 53, 0.35); }
 .btn-ghost {
-  padding: 10px 20px; border-radius: var(--r-md);
-  background: transparent; color: var(--c-text-2);
-  font-weight: 500; font-size: .88rem; border: 1px solid var(--c-border); cursor: pointer;
+  padding: 12px 24px; border-radius: var(--r-full);
+  background: var(--c-surface); color: var(--c-text-2);
+  font-weight: 600; font-size: .9rem; border: 2px solid var(--c-border); cursor: pointer;
   transition: all var(--dur-fast) var(--ease);
 }
-.btn-ghost:hover { border-color: var(--c-text-3); color: var(--c-text-1); }
+.btn-ghost:hover { border-color: var(--c-primary); color: var(--c-primary); }
 
 /* Visual decoration */
 .showcase-visual {
-  position: relative; width: 160px; height: 160px; flex-shrink: 0;
+  position: relative; width: 180px; height: 180px; flex-shrink: 0;
 }
 .visual-ring {
   position: absolute; border-radius: 50%;
-  border: 1.5px solid rgba(91,91,214,.15);
+  border: 2px solid rgba(255, 107, 53, 0.12);
   inset: 0; animation: ring-pulse 3s ease-in-out infinite;
 }
 .ring-1 { inset: 0; animation-delay: 0s; }
-.ring-2 { inset: 15px; animation-delay: .5s; }
-.ring-3 { inset: 30px; animation-delay: 1s; }
-@keyframes ring-pulse { 0%,100%{transform:scale(1);opacity:.4} 50%{transform:scale(1.06);opacity:.9} }
+.ring-2 { inset: 18px; animation-delay: .5s; border-color: rgba(64, 70, 227, 0.1); }
+.ring-3 { inset: 36px; animation-delay: 1s; border-color: rgba(241, 198, 68, 0.15); }
+@keyframes ring-pulse { 0%,100%{transform:scale(1);opacity:.3} 50%{transform:scale(1.08);opacity:1} }
 .visual-mic {
-  position: absolute; inset: 45px;
+  position: absolute; inset: 50px;
   display: flex; align-items: center; justify-content: center;
   background: var(--c-primary); border-radius: 50%; color: #fff;
+  box-shadow: 0 6px 24px rgba(255, 107, 53, 0.35);
 }
 
 .showcase-enter-active { animation: fade-slide-up .45s var(--ease); }
@@ -330,121 +526,317 @@ onMounted(async () => {
 /* ────────── Workspace ────────── */
 .workspace-grid {
   display: grid;
-  grid-template-columns: 1fr 240px;
-  gap: 1.5rem;
+  grid-template-columns: 1fr 260px;
+  gap: 1.75rem;
   align-items: start;
 }
 .workspace-main { min-width: 0; }
 .workspace-side {
-  display: flex; flex-direction: column; gap: 1rem;
+  display: flex; flex-direction: column; gap: 1.25rem;
   position: sticky; top: 5.5rem;
 }
 
 /* Side card — guest library entry */
 .side-card {
-  display: flex; align-items: center; gap: .85rem;
-  background: var(--c-surface); border: 1px solid var(--c-border);
-  border-radius: var(--r-lg); padding: 1rem 1.15rem;
-  cursor: pointer; transition: all var(--dur-fast) var(--ease);
+  display: flex; align-items: center; gap: 1rem;
+  background: var(--c-surface); border: 2px solid var(--c-border);
+  border-radius: var(--r-xl); padding: 1.25rem;
+  cursor: pointer; transition: all var(--dur-normal) var(--ease);
 }
-.side-card:hover { border-color: var(--c-primary); box-shadow: var(--shadow-sm); }
+.side-card:hover {
+  border-color: var(--c-primary); box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
 .side-card-icon {
-  width: 42px; height: 42px; flex-shrink: 0;
+  width: 48px; height: 48px; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
-  background: var(--c-primary-soft); border-radius: var(--r-md); color: var(--c-primary);
+  background: var(--c-yellow-soft); border-radius: var(--r-lg); color: #D4A017;
 }
 .side-card-body { flex: 1; min-width: 0; }
-.side-card-body h3 { font-size: .92rem; font-weight: 600; color: var(--c-text-1); margin-bottom: 4px; }
-.side-hint { font-size: .78rem; color: var(--c-text-3); }
-.side-arrow { color: var(--c-text-3); flex-shrink: 0; }
+.side-card-body h3 { font-size: .95rem; font-weight: 700; color: var(--c-text-1); margin-bottom: 4px; }
+.side-hint { font-size: .8rem; color: var(--c-text-3); }
+.side-arrow { color: var(--c-text-3); flex-shrink: 0; transition: transform var(--dur-fast) var(--ease); }
+.side-card:hover .side-arrow { transform: translateX(3px); color: var(--c-primary); }
 .guest-avatars { display: flex; align-items: center; gap: 0; }
 .mini-avatar {
-  width: 26px; height: 26px; border-radius: 50%;
+  width: 28px; height: 28px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  color: #fff; font-size: .68rem; font-weight: 600;
+  color: #fff; font-size: .7rem; font-weight: 700;
   border: 2px solid var(--c-surface); margin-left: -6px;
 }
 .mini-avatar:first-child { margin-left: 0; }
-.avatar-count { font-size: .72rem; color: var(--c-text-3); margin-left: 4px; }
+.avatar-count { font-size: .75rem; color: var(--c-text-3); margin-left: 6px; font-weight: 600; }
 
 /* Side stats */
 .side-stats {
-  display: flex; align-items: center; justify-content: center; gap: 1.5rem;
-  background: var(--c-surface); border: 1px solid var(--c-border);
-  border-radius: var(--r-lg); padding: 1rem;
+  display: flex; align-items: center; justify-content: center; gap: 2rem;
+  background: var(--c-surface); border: 2px solid var(--c-border);
+  border-radius: var(--r-xl); padding: 1.25rem;
 }
-.stat-block { display: flex; flex-direction: column; align-items: center; gap: 2px; }
-.stat-num { font-size: 1.4rem; font-weight: 700; color: var(--c-primary); }
-.stat-lbl { font-size: .72rem; color: var(--c-text-3); }
-.stat-sep { width: 1px; height: 32px; background: var(--c-border); }
+.stat-block { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.stat-num { font-size: 1.6rem; font-weight: 800; color: var(--c-primary); }
+.stat-lbl { font-size: .75rem; color: var(--c-text-3); font-weight: 600; }
+.stat-sep { width: 2px; height: 36px; background: var(--c-border); border-radius: 1px; }
 
 /* ────────── Episodes Section ────────── */
 .episodes { margin-top: .5rem; }
 .section-title {
-  display: flex; align-items: baseline; gap: .75rem; margin-bottom: 1.25rem;
+  display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin-bottom: 1.5rem;
 }
-.section-title h2 { font-size: 1.15rem; font-weight: 600; color: var(--c-text-1); }
+.section-title-main {
+  display: flex; align-items: baseline; gap: .75rem;
+}
+.section-title h2 {
+  font-size: 1.35rem; font-weight: 800; color: var(--c-text-1);
+  letter-spacing: -0.01em;
+}
 .section-count {
-  font-size: .78rem; color: var(--c-text-3);
-  background: var(--c-primary-soft); padding: 2px 10px; border-radius: var(--r-full);
+  font-size: .8rem; color: var(--c-primary); font-weight: 700;
+  background: var(--c-primary-soft); padding: 3px 14px; border-radius: var(--r-full);
+}
+
+.section-actions {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+}
+
+.btn-manage,
+.btn-subtle,
+.btn-danger {
+  border-radius: var(--r-full);
+  font-size: .78rem;
+  font-weight: 700;
+  padding: 7px 14px;
+  cursor: pointer;
+  border: 2px solid var(--c-border);
+  background: var(--c-surface);
+  color: var(--c-text-2);
+  transition: all var(--dur-fast) var(--ease);
+}
+
+.btn-manage:hover,
+.btn-subtle:hover {
+  color: var(--c-primary);
+  border-color: var(--c-primary);
+}
+
+.btn-danger {
+  border-color: rgba(255, 107, 53, 0.35);
+  color: var(--c-primary);
+}
+
+.btn-danger:disabled {
+  opacity: .55;
+  cursor: not-allowed;
 }
 
 .empty-block {
-  text-align: center; padding: 3rem 1rem;
-  background: var(--c-surface); border: 1px dashed var(--c-border); border-radius: var(--r-lg);
+  text-align: center; padding: 4rem 2rem;
+  background: var(--c-surface); border: 2px dashed var(--c-border); border-radius: var(--r-xl);
 }
-.empty-icon { color: var(--c-text-3); margin-bottom: .75rem; }
-.empty-block p { color: var(--c-text-3); font-size: .9rem; }
+.empty-icon { color: var(--c-text-3); margin-bottom: 1rem; }
+.empty-block p { color: var(--c-text-3); font-size: .95rem; }
 
 /* Episode grid */
 .episode-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 1rem;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 1.25rem;
 }
 .ep-card {
   position: relative;
-  background: var(--c-surface); border: 1px solid var(--c-border);
-  border-radius: var(--r-lg); padding: 1.25rem;
-  cursor: pointer; transition: all var(--dur-fast) var(--ease);
+  background: var(--c-surface); border: 2px solid var(--c-border);
+  border-radius: var(--r-xl); padding: 1.5rem;
+  cursor: pointer; transition: all var(--dur-normal) var(--ease);
   overflow: hidden;
 }
+.ep-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--c-primary), var(--c-yellow), var(--c-blue));
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease);
+}
 .ep-card:hover {
-  border-color: var(--c-primary); box-shadow: var(--shadow-md);
-  transform: translateY(-2px);
+  border-color: transparent; box-shadow: var(--shadow-lg);
+  transform: translateY(-4px);
 }
-.ep-card:hover .ep-play-hint { opacity: 1; }
+.ep-card.is-managing {
+  cursor: default;
+}
+.ep-card.is-managing:hover {
+  transform: translateY(0);
+}
+.ep-card.is-managing.is-selected {
+  border-color: var(--c-primary);
+  box-shadow: 0 0 0 2px rgba(255, 107, 53, 0.14);
+}
+.ep-card:hover::before { opacity: 1; }
+.ep-card:hover .ep-play-hint { opacity: 1; transform: scale(1); }
+
+.ep-checkbox {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 2px solid var(--c-border);
+  background: var(--c-surface);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all var(--dur-fast) var(--ease);
+}
+
+.ep-checkbox:hover {
+  border-color: var(--c-primary);
+}
+
+.ep-checkbox.checked {
+  border-color: var(--c-primary);
+  background: var(--c-primary);
+}
 .ep-card-top {
-  display: flex; justify-content: space-between; align-items: center; margin-bottom: .6rem;
+  display: flex; justify-content: space-between; align-items: center; margin-bottom: .75rem;
 }
-.ep-num { font-size: .72rem; font-weight: 700; color: var(--c-primary); }
-.ep-date { font-size: .7rem; color: var(--c-text-3); }
+.ep-card-top-left {
+  display: flex; align-items: center; gap: .5rem;
+}
+.ep-num {
+  font-size: .78rem; font-weight: 800; color: var(--c-primary);
+  background: var(--c-primary-soft); padding: 2px 10px; border-radius: var(--r-full);
+}
+.ep-date { font-size: .75rem; color: var(--c-text-3); font-weight: 500; }
 .ep-title {
-  font-size: .95rem; font-weight: 600; color: var(--c-text-1); margin-bottom: .35rem;
+  font-size: 1.05rem; font-weight: 700; color: var(--c-text-1); margin-bottom: .4rem;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
-  line-height: 1.45;
+  line-height: 1.5;
 }
 .ep-desc {
-  font-size: .8rem; color: var(--c-text-2); line-height: 1.5;
+  font-size: .85rem; color: var(--c-text-2); line-height: 1.6;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
-  margin-bottom: .75rem;
+  margin-bottom: 1rem;
 }
 .ep-card-bottom {
-  display: flex; justify-content: space-between; align-items: flex-end;
+  display: flex; justify-content: space-between; align-items: flex-end; gap: .5rem;
 }
-.ep-tags { display: flex; flex-wrap: wrap; gap: .35rem; }
+.ep-tags { display: flex; flex-wrap: wrap; gap: .4rem; flex: 1; min-width: 0; }
+.ep-bottom-right { display: flex; align-items: center; flex-shrink: 0; }
 .ep-tag {
-  padding: 2px 8px; border-radius: var(--r-sm);
-  background: var(--c-primary-soft); color: var(--c-primary);
-  font-size: .68rem; font-weight: 600;
+  padding: 3px 10px; border-radius: var(--r-full);
+  background: var(--c-accent-soft); color: var(--c-accent);
+  font-size: .72rem; font-weight: 700;
 }
-.ep-info { display: flex; gap: .6rem; font-size: .7rem; color: var(--c-text-3); }
+.ep-tag:nth-child(2) { background: var(--c-blue-soft); color: #0099CC; }
+.ep-tag:nth-child(3) { background: var(--c-green-soft); color: var(--c-green); }
+.ep-info { display: flex; gap: .6rem; font-size: .75rem; color: var(--c-text-3); font-weight: 500; }
 .ep-play-hint {
-  position: absolute; top: 1rem; right: 1rem;
-  width: 32px; height: 32px; border-radius: 50%;
+  position: absolute; top: 1.25rem; right: 1.25rem;
+  width: 36px; height: 36px; border-radius: 50%;
   background: var(--c-primary); color: #fff;
   display: flex; align-items: center; justify-content: center;
-  opacity: 0; transition: opacity var(--dur-fast) var(--ease);
+  opacity: 0; transform: scale(0.8);
+  transition: all var(--dur-normal) var(--ease-bounce);
+  box-shadow: 0 3px 10px rgba(255, 107, 53, 0.3);
+}
+
+.ep-delete-btn {
+  border: none;
+  border-radius: var(--r-full);
+  background: rgba(255, 107, 53, 0.1);
+  color: var(--c-primary);
+  font-size: .72rem;
+  font-weight: 700;
+  padding: 5px 14px;
+  cursor: pointer;
+  transition: all var(--dur-fast) var(--ease);
+  white-space: nowrap;
+}
+
+.ep-delete-btn:hover {
+  background: var(--c-primary);
+  color: #fff;
+}
+
+.ep-delete-btn:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+
+/* ────────── Delete Confirmation Dialog ────────── */
+.dialog-overlay {
+  position: fixed; inset: 0;
+  background: rgba(15, 23, 42, 0.4);
+  backdrop-filter: blur(12px);
+  z-index: 9999;
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+}
+.dialog-content {
+  background: #FFFFFF; border-radius: 28px;
+  width: 100%; max-width: 420px;
+  padding: 40px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  text-align: center;
+  animation: dialog-pop .3s var(--ease-bounce);
+}
+@keyframes dialog-pop {
+  from { opacity: 0; transform: scale(0.9) translateY(10px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+.dialog-icon {
+  width: 72px; height: 72px;
+  background: rgba(255, 107, 53, 0.1);
+  color: #FF6B35;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  margin: 0 auto 28px; font-size: 36px;
+}
+.dialog-title {
+  font-size: 1.3rem; font-weight: 800;
+  color: var(--c-text-1); margin-bottom: 12px;
+}
+.dialog-body {
+  font-size: 1rem; color: var(--c-text-2);
+  line-height: 1.6; margin-bottom: 36px;
+}
+.dialog-actions {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 14px;
+}
+.dialog-btn {
+  padding: 14px; border-radius: 16px;
+  font-size: 1rem; font-weight: 700;
+  cursor: pointer; transition: all .2s var(--ease);
+  border: none;
+}
+.dialog-btn.cancel {
+  background: var(--c-surface); color: var(--c-text-1);
+  box-shadow: 0 0 0 1px var(--c-border);
+}
+.dialog-btn.cancel:hover { background: #f8fafc; color: var(--c-primary); }
+.dialog-btn.confirm {
+  background: #FF6B35; color: #FFFFFF;
+}
+.dialog-btn.confirm:hover { background: #E85A2A; transform: translateY(-2px); box-shadow: 0 4px 14px rgba(255, 107, 53, 0.3); }
+
+/* Dialog Transitions */
+.dialog-fade-enter-active, .dialog-fade-leave-active {
+  transition: opacity .3s var(--ease);
+}
+.dialog-fade-enter-from, .dialog-fade-leave-to {
+  opacity: 0;
+}
+.dialog-fade-enter-active .dialog-content {
+  animation: dialog-pop .35s var(--ease-bounce);
+}
+.dialog-fade-leave-active .dialog-content {
+  animation: dialog-pop .2s var(--ease) reverse;
 }
 
 /* ────────── Responsive ────────── */
@@ -453,16 +845,18 @@ onMounted(async () => {
   .workspace-side { flex-direction: row; position: static; }
   .side-card { flex: 1; }
   .side-stats { flex: 0 0 auto; }
-  .showcase { flex-direction: column; text-align: center; padding: 2rem; }
+  .showcase { flex-direction: column; text-align: center; padding: 2.5rem; }
   .showcase-actions { justify-content: center; }
-  .showcase-visual { width: 120px; height: 120px; }
-  .visual-mic { inset: 35px; }
+  .showcase-visual { width: 140px; height: 140px; }
+  .visual-mic { inset: 40px; }
 }
 
 @media (max-width: 600px) {
   .workspace-side { flex-direction: column; }
   .episode-grid { grid-template-columns: 1fr; }
-  .showcase { padding: 1.5rem; }
-  .showcase-title { font-size: 1.2rem; }
+  .showcase { padding: 2rem; }
+  .showcase-title { font-size: 1.4rem; }
+  .section-title { align-items: flex-start; flex-direction: column; }
+  .section-actions { width: 100%; flex-wrap: wrap; }
 }
 </style>

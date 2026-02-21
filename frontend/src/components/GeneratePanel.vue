@@ -250,12 +250,13 @@ onUnmounted(() => {
   position: relative;
   background: var(--c-surface);
   border-radius: var(--r-xl);
+  border: 2px solid var(--c-border);
   padding: 1.75rem;
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow-card);
   overflow: hidden;
 }
 
-/* Header */
+/* ── Header ── */
 .studio-header {
   text-align: center;
   margin-bottom: 1.5rem;
@@ -265,20 +266,20 @@ onUnmounted(() => {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.2);
-  padding: 5px 12px;
+  background: rgba(255, 107, 53, 0.1);
+  border: 2px solid rgba(255, 107, 53, 0.2);
+  padding: 5px 14px;
   border-radius: var(--r-full);
   font-size: 0.75rem;
   font-weight: 600;
-  color: #ef4444;
+  color: var(--c-primary);
   margin-bottom: 0.75rem;
 }
 
 .studio-badge .live-dot {
   width: 6px;
   height: 6px;
-  background: #ef4444;
+  background: var(--c-primary);
   border-radius: 50%;
   animation: livePulse 1.5s infinite;
 }
@@ -300,11 +301,12 @@ onUnmounted(() => {
   font-size: 0.9rem;
 }
 
-/* Studio Scene */
+/* ── Studio Scene ── */
 .studio-scene {
   position: relative;
-  background: linear-gradient(180deg, #f8f9fc 0%, #eef0f5 100%);
+  background: linear-gradient(180deg, var(--c-bg) 0%, var(--c-bg-warm) 100%);
   border-radius: var(--r-lg);
+  border: 2px solid var(--c-border);
   padding: 2rem 1.5rem;
   min-height: 220px;
   margin-bottom: 1.5rem;
@@ -322,19 +324,19 @@ onUnmounted(() => {
   left: -20%;
   width: 60%;
   height: 100%;
-  background: radial-gradient(ellipse, rgba(91, 91, 214, 0.1) 0%, transparent 70%);
+  background: radial-gradient(ellipse, rgba(255, 107, 53, 0.08) 0%, transparent 70%);
 }
 
 .bg-grid {
   position: absolute;
   inset: 0;
   background-image: 
-    linear-gradient(rgba(91, 91, 214, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(91, 91, 214, 0.05) 1px, transparent 1px);
+    linear-gradient(rgba(240, 224, 212, 0.5) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(240, 224, 212, 0.5) 1px, transparent 1px);
   background-size: 20px 20px;
 }
 
-/* Podium */
+/* ── Podium ── */
 .podium {
   position: absolute;
   bottom: 20px;
@@ -348,15 +350,15 @@ onUnmounted(() => {
 .podium-surface {
   width: 100px;
   height: 16px;
-  background: linear-gradient(180deg, #e2e8f0 0%, #cbd5e1 100%);
-  border-radius: 8px 8px 0 0;
+  background: linear-gradient(180deg, var(--c-border) 0%, var(--c-bg-warm) 100%);
+  border-radius: var(--r-sm) var(--r-sm) 0 0;
 }
 
 .podium-logo {
   width: 32px;
   height: 32px;
-  background: linear-gradient(135deg, var(--c-primary) 0%, var(--c-accent) 100%);
-  border-radius: 8px;
+  background: linear-gradient(135deg, var(--c-primary) 0%, var(--c-yellow) 100%);
+  border-radius: var(--r-sm);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -367,17 +369,17 @@ onUnmounted(() => {
 .podium-base {
   width: 80px;
   height: 20px;
-  background: linear-gradient(180deg, #cbd5e1 0%, #94a3b8 100%);
+  background: linear-gradient(180deg, var(--c-bg-warm) 0%, var(--c-border) 100%);
   border-radius: 0 0 4px 4px;
 }
 
-/* People */
+/* ── People ── */
 .person {
   position: absolute;
   display: flex;
   flex-direction: column;
   align-items: center;
-  transition: all 0.3s ease;
+  transition: all var(--dur-normal) var(--ease-bounce);
 }
 
 .person.speaking {
@@ -414,8 +416,8 @@ onUnmounted(() => {
   top: -15px;
   width: 16px;
   height: 20px;
-  background: #64748b;
-  border-radius: 8px 8px 4px 4px;
+  background: var(--c-text-2);
+  border-radius: var(--r-sm) var(--r-sm) 4px 4px;
 }
 
 .mic::after {
@@ -426,7 +428,7 @@ onUnmounted(() => {
   transform: translateX(-50%);
   width: 6px;
   height: 6px;
-  background: #94a3b8;
+  background: var(--c-text-3);
   border-radius: 50%;
 }
 
@@ -437,22 +439,22 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(45, 27, 14, 0.1);
+  transition: all var(--dur-normal) var(--ease-bounce);
 }
 
 .host-avatar {
   width: 56px;
   height: 56px;
-  background: linear-gradient(135deg, var(--c-primary) 0%, var(--c-accent) 100%);
+  background: linear-gradient(135deg, var(--c-primary) 0%, var(--c-primary-hover) 100%);
 }
 
-.guest-1-avatar { background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); }
-.guest-2-avatar { background: linear-gradient(135deg, var(--c-accent) 0%, #b45309 100%); }
+.guest-1-avatar { background: linear-gradient(135deg, var(--c-blue) 0%, var(--c-accent) 100%); }
+.guest-2-avatar { background: linear-gradient(135deg, var(--c-yellow) 0%, var(--c-primary) 100%); }
 .guest-3-avatar { background: linear-gradient(135deg, var(--c-success) 0%, #047857 100%); }
 
 .person.speaking .avatar {
-  box-shadow: 0 0 20px rgba(91, 91, 214, 0.4);
+  box-shadow: 0 0 20px rgba(255, 107, 53, 0.4);
 }
 
 .avatar-emoji {
@@ -479,7 +481,7 @@ onUnmounted(() => {
   color: var(--c-text-3);
 }
 
-/* Sound Bar */
+/* ── Sound Bar ── */
 .sound-bar {
   display: flex;
   align-items: flex-end;
@@ -487,15 +489,15 @@ onUnmounted(() => {
   height: 12px;
   margin-top: 4px;
   opacity: 0;
-  transition: opacity 0.3s;
+  transition: opacity var(--dur-normal) ease;
 }
 
 .sound-bar.active { opacity: 1; }
 
 .sound-bar span {
-  width: 2px;
+  width: 3px;
   background: var(--c-primary);
-  border-radius: 1px;
+  border-radius: 2px;
   animation: soundBar 0.4s ease-in-out infinite alternate;
 }
 
@@ -508,7 +510,7 @@ onUnmounted(() => {
   100% { transform: scaleY(1); }
 }
 
-/* Wave */
+/* ── Wave ── */
 .wave-container {
   position: absolute;
   bottom: 8px;
@@ -521,7 +523,7 @@ onUnmounted(() => {
 .wave {
   width: 3px;
   height: 16px;
-  background: linear-gradient(180deg, var(--c-primary) 0%, var(--c-accent) 100%);
+  background: linear-gradient(180deg, var(--c-primary) 0%, var(--c-yellow) 100%);
   border-radius: 2px;
   animation: waveAnim 0.8s ease-in-out infinite;
 }
@@ -535,7 +537,7 @@ onUnmounted(() => {
   50% { transform: scaleY(1); opacity: 1; }
 }
 
-/* Progress */
+/* ── Progress ── */
 .progress-bar {
   display: flex;
   justify-content: space-between;
@@ -560,7 +562,7 @@ onUnmounted(() => {
   justify-content: center;
   background: var(--c-bg);
   border: 2px solid var(--c-border);
-  transition: all 0.3s ease;
+  transition: all var(--dur-normal) var(--ease-bounce);
   z-index: 1;
 }
 
@@ -568,7 +570,7 @@ onUnmounted(() => {
   background: var(--c-primary);
   border-color: var(--c-primary);
   color: white;
-  box-shadow: 0 0 12px rgba(91, 91, 214, 0.4);
+  box-shadow: 0 0 12px rgba(255, 107, 53, 0.4);
 }
 
 .progress-step.completed .step-dot {
@@ -606,13 +608,14 @@ onUnmounted(() => {
   background: var(--c-success);
 }
 
-/* Status */
+/* ── Status ── */
 .status-box {
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 0.875rem 1rem;
   background: var(--c-bg);
+  border: 2px solid var(--c-border);
   border-radius: var(--r-md);
 }
 
@@ -635,17 +638,17 @@ onUnmounted(() => {
 }
 
 .error-text {
-  color: var(--c-error);
+  color: #ef4444;
   font-size: 0.85rem;
   font-weight: 500;
   width: 100%;
 }
 
-/* Completion */
+/* ── Completion ── */
 .complete-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(255, 255, 255, 0.95);
+  background: rgba(255, 245, 237, 0.95);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -654,7 +657,7 @@ onUnmounted(() => {
 
 .complete-box {
   text-align: center;
-  animation: popIn 0.4s ease;
+  animation: popIn 0.4s var(--ease-bounce);
 }
 
 @keyframes popIn {
@@ -673,11 +676,12 @@ onUnmounted(() => {
   justify-content: center;
   color: white;
   margin: 0 auto 1rem;
+  box-shadow: 0 4px 20px rgba(46, 204, 113, 0.3);
 }
 
 .complete-box h4 {
   font-size: 1.25rem;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--c-text-1);
   margin-bottom: 0.25rem;
 }
@@ -689,7 +693,7 @@ onUnmounted(() => {
 
 .fade-enter-active,
 .fade-leave-active {
-  transition: opacity 0.3s ease;
+  transition: opacity var(--dur-normal) ease;
 }
 
 .fade-enter-from,
@@ -697,7 +701,7 @@ onUnmounted(() => {
   opacity: 0;
 }
 
-/* Responsive */
+/* ── Responsive ── */
 @media (max-width: 700px) {
   .studio-scene {
     min-height: 180px;
