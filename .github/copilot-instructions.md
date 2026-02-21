@@ -1,6 +1,6 @@
 # MindCast — Copilot Instructions
 
-Multi-agent AI podcast generator (AI圆桌派). Fetches AI news via Tavily, generates Chinese dialogue with 4 LangGraph agents, synthesizes voice with MiniMax TTS, serves via FastAPI + Vue 3.
+Multi-agent podcast generator (圆桌派). Fetches topic-based news via Tavily, generates Chinese dialogue with 4 LangGraph agents, synthesizes voice with MiniMax TTS, serves via FastAPI + Vue 3.
 
 ## Architecture
 
@@ -78,4 +78,4 @@ All models in [`backend/models.py`](../backend/models.py) use `pydantic.BaseMode
 
 - All dialogue, progress messages, system prompts, and user-facing text are **Chinese**.
 - English only for AI/tech proper nouns (e.g., LangGraph, ChromaDB).
-- Frontend brand name: "AI圆桌派"; stack credit: "基于 LangGraph + MiniMax TTS".
+- Frontend brand name: "圆桌派"; stack credit: "基于 LangGraph + MiniMax TTS".
