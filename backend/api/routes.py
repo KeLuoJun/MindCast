@@ -74,7 +74,7 @@ async def _translate_to_chinese(text: str, llm_service) -> str:
 
 
 @router.get("/debug/news")
-async def debug_news(max_results: int = 10, topic: str = ""):
+async def debug_news(max_results: int = 6, topic: str = ""):
     """Fetch news by topic (without topic/script/audio generation)."""
     from backend.services.llm_service import get_llm_service
 

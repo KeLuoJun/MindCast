@@ -60,7 +60,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
   async function fetchNews() {
     fetchingNews.value = true
     try {
-      const params = new URLSearchParams({ max_results: '10' })
+      const params = new URLSearchParams({ max_results: '6' })
       if (topicQuery.value.trim()) {
         params.set('topic', topicQuery.value.trim())
       }
