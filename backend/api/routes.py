@@ -621,7 +621,7 @@ async def generate_guest(req: GuestGenerateRequest):
     male_voices = VOICE_LIBRARY_BY_GENDER[Gender.MALE]
     female_voices = VOICE_LIBRARY_BY_GENDER[Gender.FEMALE]
 
-    prompt = f"""根据以下用户描述，为播客节目"圆桌派"设计一位嘉宾角色。
+    prompt = f"""根据以下用户描述，为播客节目 MindCast 设计一位嘉宾角色。
 
 用户描述：{req.description}
 

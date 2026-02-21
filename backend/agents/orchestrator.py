@@ -633,7 +633,7 @@ class PodcastOrchestrator:
 
         # --- Opening ---
         # Add the fixed show opening
-        fixed_opening_text = "各位好，欢迎来到——『圆桌派』。在这里，我们抛开表面的新闻标题，聊一聊这些热点背后真正值得思考的问题。"
+        fixed_opening_text = "各位好，欢迎来到新一期的播客。"
         _append_line(
             DialogueLine(
                 speaker=self.host.name,
@@ -650,7 +650,7 @@ class PodcastOrchestrator:
             trimmed_open,
             f"现在是节目开场。请紧接刚才的开场白，用一种轻松自然的方式带出今天的话题「{plan.topic}」，"
             f"顺便介绍{len(guest_names)}位嘉宾：{'、'.join(guest_names)}。"
-            f"开场要求：紧接『圆桌派』的基调；别搞『欢迎收听』模板；可用反直觉事实、尖锐问题或生活化场景做钩子；"
+            f"开场要求：别搞『欢迎收听』模板；可用反直觉事实、尖锐问题或生活化场景做钩子；"
             f"可轻微表达你的立场或困惑。{opening_hint}",
         )
         _append_line(opening_line)

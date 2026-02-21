@@ -18,7 +18,7 @@
             <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
               <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 14.5c-2.49 0-4.5-2.01-4.5-4.5S9.51 7.5 12 7.5s4.5 2.01 4.5 4.5-2.01 4.5-4.5 4.5z"/>
             </svg>
-            AI 深度探讨 · 圆桌派
+            AI 深度探讨 · MindCast
           </div>
           <h1 class="ep-title">{{ episode.title }}</h1>
           <p class="ep-summary">{{ episode.summary }}</p>

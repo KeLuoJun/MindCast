@@ -11,8 +11,8 @@
             </svg>
           </div>
           <div class="logo-text">
-            <span class="logo-name">圆桌派</span>
-            <span class="logo-sub">ROUNDTABLE PODCAST</span>
+            <span class="logo-name">MindCast</span>
+            <span class="logo-sub">AI PODCAST GENERATOR</span>
           </div>
         </router-link>
         <nav class="header-nav">
