@@ -44,7 +44,8 @@ class BaseAgent:
         If *conversation_history* is provided it is used instead of the
         agent's own history (useful for shared podcast conversation).
         """
-        history = conversation_history if conversation_history is not None else self.conversation_history
+        use_external_history = conversation_history is not None
+        history = conversation_history if use_external_history else self.conversation_history
 
         messages = [
             {"role": "system", "content": self.system_prompt},
@@ -58,11 +59,14 @@ class BaseAgent:
             max_tokens=max_tokens,
         )
 
-        # Update internal history
-        self.conversation_history.append(
-            {"role": "user", "content": user_message})
-        self.conversation_history.append(
-            {"role": "assistant", "content": response})
+        # Update internal history only when using internal memory mode.
+        # In shared-context mode (conversation_history provided), writing to
+        # self.conversation_history would duplicate state and grow unbounded.
+        if not use_external_history:
+            self.conversation_history.append(
+                {"role": "user", "content": user_message})
+            self.conversation_history.append(
+                {"role": "assistant", "content": response})
 
         return response
 
