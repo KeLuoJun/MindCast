@@ -72,7 +72,7 @@ class ScriptSynthesisRequest(BaseModel):
 class GuestGenerateRequest(BaseModel):
     """Natural-language description used to AI-generate a guest profile."""
     description: str = Field(..., min_length=5,
-                             description="用自然语言描述嘉宾特征，例如：一位30岁的女性AI产品经理，理性冷静，喜欢用数据说话")
+                             description="用自然语言描述嘉宾特征，例如：一位30岁的女性产品经理，理性冷静，喜欢用数据说话")
 
 
 class VoiceLibraryResponse(BaseModel):

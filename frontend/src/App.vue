@@ -9,7 +9,7 @@
             </svg>
           </div>
           <div class="logo-text">
-            <h1>AI圆桌派</h1>
+            <h1>圆桌派</h1>
           </div>
         </router-link>
         <nav class="header-nav">
@@ -42,10 +42,10 @@
     <footer class="app-footer">
       <div class="footer-content">
         <div class="footer-brand">
-          <span class="brand-text">AI圆桌派</span>
-          <p class="footer-desc">多智能体协作生成 · 每日 AI 资讯深度解读</p>
+          <span class="brand-text">圆桌派</span>
+          <p class="footer-desc">多智能体协作生成 · 深度资讯解读与多元观点碰撞</p>
         </div>
-        <p class="footer-copyright">© 2026 AI圆桌派 MVP · 基于 LangGraph + MiniMax TTS</p>
+        <p class="footer-copyright">© 2026 圆桌派 MVP · 基于 LangGraph + MiniMax TTS</p>
       </div>
     </footer>
 

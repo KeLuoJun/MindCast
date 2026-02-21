@@ -5,13 +5,13 @@
       <div class="hero-content">
         <div class="hero-badge">
           <span class="badge-dot"></span>
-          AI 智能播客
+          智能播客
         </div>
         <h1 class="hero-title">
-          欢迎来到 <span class="brand-text">AI圆桌派</span>
+          欢迎来到 <span class="brand-text">圆桌派</span>
         </h1>
         <p class="hero-desc">
-          多智能体协作生成 · 每日为您提供深度、多元的 AI 资讯解读
+          多智能体协作生成 · 输入任何话题，为您生成深度、多元的播客节目
         </p>
       </div>
       <div class="hero-decoration">

@@ -7,7 +7,7 @@
           <span class="live-dot"></span>
           录音棚
         </div>
-        <h3>AI圆桌派录音棚</h3>
+        <h3>圆桌派录音棚</h3>
         <p class="stage-name">{{ currentStageLabel }}</p>
       </div>
 
