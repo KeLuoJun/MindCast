@@ -13,15 +13,19 @@ from fastapi.responses import FileResponse, StreamingResponse
 
 from backend.agents.orchestrator import PodcastOrchestrator
 from backend.api.schemas import (
+    AppSettingsOut,
+    AppSettingsPatch,
     DialogueLineOut,
     EpisodeDetail,
     EpisodeSummary,
+    GuestGenerateRequest,
     GuestProfileIn,
     GuestProfileOut,
     GenerateRequest,
     ScriptSynthesisRequest,
     ScriptPreviewRequest,
     TaskCreatedResponse,
+    VoiceLibraryResponse,
 )
 from backend.config import settings
 from backend.knowledge import get_knowledge_base
@@ -407,6 +411,165 @@ async def delete_guest(guest_name: str):
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return [GuestProfileOut(**item.model_dump(mode="json")) for item in guests]
+
+
+# ---------------------------------------------------------------------------
+# POST /api/guests/generate — AI-generate guest profile from NL description
+# ---------------------------------------------------------------------------
+
+@router.post("/guests/generate", response_model=GuestProfileOut)
+async def generate_guest(req: GuestGenerateRequest):
+    """Use LLM to generate a full guest profile from a natural-language description."""
+    from backend.services.llm_service import get_llm_service
+    from backend.agents.personas import VOICE_LIBRARY_BY_GENDER
+    from backend.models import Gender
+
+    llm = get_llm_service()
+    male_voices = VOICE_LIBRARY_BY_GENDER[Gender.MALE]
+    female_voices = VOICE_LIBRARY_BY_GENDER[Gender.FEMALE]
+
+    prompt = f"""根据以下用户描述，为AI播客节目"AI圆桌派"设计一位嘉宾角色。
+
+用户描述：{req.description}
+
+可选男性音色ID列表：{male_voices}
+可选女性音色ID列表：{female_voices}
+
+请从音色列表中选择一个最匹配嘉宾气质的音色ID。
+只返回如下JSON，不加任何说明或markdown代码块标记：
+{{
+  "name": "嘉宾姓名（中文，2-3字，有个性）",
+  "gender": "male 或 female",
+  "age": 年龄（18-60之间的整数）,
+  "mbti": "MBTI类型（如INTJ、ENTP等16种之一）",
+  "occupation": "具体职业描述（10字以内）",
+  "personality": "性格特征（2-3句，突出独特之处，避免套话）",
+  "speaking_style": "说话风格（2-3句，具体描述语言习惯和表达方式）",
+  "stance_bias": "观点倾向或认知偏见（1-2句，可为空字符串）",
+  "voice_id": "从音色列表中选取最匹配的一个ID",
+  "background": "专业背景和经历（2-3句，具体真实）"
+}}"""
+
+    messages = [
+        {"role": "system", "content": "你是一个播客角色设计师，擅长创建有独特个性的播客嘉宾人物。只返回JSON，不加任何说明文字或markdown标记。"},
+        {"role": "user", "content": prompt},
+    ]
+
+    try:
+        raw = await llm.chat(messages, temperature=0.9, max_tokens=1024)
+        raw = raw.strip()
+        # Strip markdown fences if present
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+        raw = raw.strip()
+        data = json.loads(raw)
+    except Exception as exc:
+        logger.error("Guest generation failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"AI生成失败：{exc}") from exc
+
+    # Sanitize values
+    gender = str(data.get("gender", "male")).strip().lower()
+    if gender not in ("male", "female"):
+        gender = "male"
+    data["gender"] = gender
+    try:
+        age = max(18, min(60, int(data.get("age", 30))))
+    except (TypeError, ValueError):
+        age = 30
+    data["age"] = age
+    data.setdefault("stance_bias", "")
+    data.setdefault("voice_id", "")
+
+    return GuestProfileOut(**data)
+
+
+# ---------------------------------------------------------------------------
+# GET /api/voices — built-in voice library
+# ---------------------------------------------------------------------------
+
+@router.get("/voices", response_model=VoiceLibraryResponse)
+async def list_voices():
+    """Return built-in MiniMax voice IDs grouped by gender plus the official voice picker URL."""
+    from backend.agents.personas import VOICE_LIBRARY_BY_GENDER
+    from backend.models import Gender
+
+    return VoiceLibraryResponse(
+        male=VOICE_LIBRARY_BY_GENDER[Gender.MALE],
+        female=VOICE_LIBRARY_BY_GENDER[Gender.FEMALE],
+        official_url="https://www.minimaxi.com/audio/voices",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Settings management endpoints
+# ---------------------------------------------------------------------------
+
+def _mask_key(key: str) -> str:
+    """Return a masked version of an API key (show first 4 + last 4 chars)."""
+    if not key:
+        return ""
+    if len(key) <= 8:
+        return "****"
+    return key[:4] + "****" + key[-4:]
+
+
+def _update_env_file(patch: "AppSettingsPatch") -> None:
+    """Write non-None, non-masked patch values to .env file."""
+    env_path = Path(".env")
+    existing: dict[str, str] = {}
+    if env_path.exists():
+        for line in env_path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                k, _, v = line.partition("=")
+                existing[k.strip().upper()] = v.strip()
+
+    # Mapping from schema field to env var name (pydantic-settings convention = field UPPER)
+    field_map: dict[str, str] = {
+        "llm_base_url": "LLM_BASE_URL",
+        "llm_api_key": "LLM_API_KEY",
+        "llm_model": "LLM_MODEL",
+        "tavily_api_key": "TAVILY_API_KEY",
+        "minimax_api_key": "MINIMAX_API_KEY",
+        "minimax_tts_model": "MINIMAX_TTS_MODEL",
+        "minimax_tts_base_url": "MINIMAX_TTS_BASE_URL",
+    }
+    for field, env_key in field_map.items():
+        value = getattr(patch, field, None)
+        if value is not None and "****" not in str(value):
+            existing[env_key] = str(value)
+
+    lines = [f"{k}={v}" for k, v in existing.items()]
+    env_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+@router.get("/settings", response_model=AppSettingsOut)
+async def get_settings():
+    """Return current application settings (API keys masked)."""
+    return AppSettingsOut(
+        llm_base_url=settings.llm_base_url,
+        llm_api_key=_mask_key(settings.llm_api_key),
+        llm_model=settings.llm_model,
+        tavily_api_key=_mask_key(settings.tavily_api_key),
+        minimax_api_key=_mask_key(settings.minimax_api_key),
+        minimax_tts_model=settings.minimax_tts_model,
+        minimax_tts_base_url=settings.minimax_tts_base_url,
+        max_guests=settings.max_guests,
+        cors_origins=settings.cors_origins,
+    )
+
+
+@router.patch("/settings")
+async def update_settings(patch: AppSettingsPatch):
+    """Write changed values to .env and hot-reload the settings singleton."""
+    from backend import config as config_module
+
+    _update_env_file(patch)
+    # Hot-reload: replace the singleton with a freshly loaded instance
+    config_module.settings = config_module.Settings()
+    return {"status": "ok", "message": "设置已更新，服务配置已重新加载"}
 
 
 # ---------------------------------------------------------------------------

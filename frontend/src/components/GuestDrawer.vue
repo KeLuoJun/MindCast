@@ -185,8 +185,31 @@
                       </div>
                     </div>
                     <div class="form-group">
-                      <label>音色ID</label>
-                      <input v-model="guestForm.voice_id" type="text" placeholder="可选" />
+                      <label class="voice-label">
+                        音色ID
+                        <a href="https://www.minimaxi.com/audio/voices" target="_blank" rel="noopener" class="voice-official-link">
+                          <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 00-3 3v4a3 3 0 006 0V5a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/></svg>
+                          官方音色库
+                        </a>
+                      </label>
+                      <div class="voice-input-row">
+                        <input v-model="guestForm.voice_id" type="text" class="voice-input" placeholder="粘贴自定义音色ID，或从内置列表选择" />
+                        <button class="btn-voice-picker" :class="{ 'btn-voice-picker--open': showVoicePicker }" @click.stop="showVoicePicker = !showVoicePicker" title="内置音色列表">
+                          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6,9 12,15 18,9"/></svg>
+                        </button>
+                      </div>
+                      <transition name="expand">
+                        <div v-if="showVoicePicker" class="voice-picker">
+                          <div class="voice-picker-header">内置音色（{{ voicesForCurrentGender.length }} 个 · 按当前性别筛选）</div>
+                          <div class="voice-options">
+                            <button v-for="v in voicesForCurrentGender" :key="v" class="voice-option" :class="{ 'voice-option--active': guestForm.voice_id === v }" @click="selectBuiltinVoice(v)">
+                              <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 00-3 3v4a3 3 0 006 0V5a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/></svg>
+                              <span>{{ v }}</span>
+                            </button>
+                          </div>
+                          <a href="https://www.minimaxi.com/audio/voices" target="_blank" rel="noopener" class="voice-more-link">前往官方音色库选更多 →</a>
+                        </div>
+                      </transition>
                     </div>
                     <div class="form-group">
                       <label>性格特征</label>
@@ -289,7 +312,36 @@
                       </svg>
                     </button>
                   </div>
-                  
+
+                  <!-- AI 智能生成 -->
+                  <div class="ai-gen-panel">
+                    <div class="ai-gen-header">
+                      <div class="ai-gen-badge">
+                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+                        AI 智能生成
+                      </div>
+                      <span class="ai-gen-hint">描述你想要的嘉宾，AI 自动填写所有资料</span>
+                    </div>
+                    <div class="ai-gen-input-row">
+                      <textarea
+                        v-model="aiDescription"
+                        rows="2"
+                        class="ai-gen-textarea"
+                        placeholder="例如：一位35岁的女性AI产品经理，冷静理性，喜欢用数据说话，对AI商业化有深刻见解"
+                      ></textarea>
+                      <button
+                        class="btn-ai-gen"
+                        :disabled="generatingGuest || !aiDescription.trim()"
+                        @click="generateGuestFromAI"
+                      >
+                        <span v-if="generatingGuest" class="spinner"></span>
+                        <svg v-else viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="5,12 12,5 19,12"/><polyline points="5,19 12,12 19,19"/></svg>
+                        {{ generatingGuest ? '生成中...' : 'AI 生成' }}
+                      </button>
+                    </div>
+                    <div class="ai-gen-divider"><span>或手动填写</span></div>
+                  </div>
+
                   <div class="form-body">
                     <div class="form-row">
                       <div class="form-group">
@@ -319,8 +371,31 @@
                       </div>
                     </div>
                     <div class="form-group">
-                      <label>音色ID</label>
-                      <input v-model="guestForm.voice_id" type="text" placeholder="可选" />
+                      <label class="voice-label">
+                        音色ID
+                        <a href="https://www.minimaxi.com/audio/voices" target="_blank" rel="noopener" class="voice-official-link">
+                          <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 00-3 3v4a3 3 0 006 0V5a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/></svg>
+                          官方音色库
+                        </a>
+                      </label>
+                      <div class="voice-input-row">
+                        <input v-model="guestForm.voice_id" type="text" class="voice-input" placeholder="粘贴自定义音色ID，或从内置列表选择" />
+                        <button class="btn-voice-picker" :class="{ 'btn-voice-picker--open': showVoicePicker }" @click.stop="showVoicePicker = !showVoicePicker" title="内置音色列表">
+                          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6,9 12,15 18,9"/></svg>
+                        </button>
+                      </div>
+                      <transition name="expand">
+                        <div v-if="showVoicePicker" class="voice-picker">
+                          <div class="voice-picker-header">内置音色（{{ voicesForCurrentGender.length }} 个 · 按当前性别筛选）</div>
+                          <div class="voice-options">
+                            <button v-for="v in voicesForCurrentGender" :key="v" class="voice-option" :class="{ 'voice-option--active': guestForm.voice_id === v }" @click="selectBuiltinVoice(v)">
+                              <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 00-3 3v4a3 3 0 006 0V5a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/></svg>
+                              <span>{{ v }}</span>
+                            </button>
+                          </div>
+                          <a href="https://www.minimaxi.com/audio/voices" target="_blank" rel="noopener" class="voice-more-link">前往官方音色库选更多 →</a>
+                        </div>
+                      </transition>
                     </div>
                     <div class="form-group">
                       <label>性格特征</label>
@@ -354,7 +429,7 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
+import { ref, watch, computed, onMounted } from 'vue'
 
 const props = defineProps({
   modelValue: Boolean,
@@ -386,6 +461,67 @@ function defaultForm() {
 
 const guestForm = ref(defaultForm())
 
+// AI generation
+const aiDescription = ref('')
+const generatingGuest = ref(false)
+
+// Voice library
+const voiceLibrary = ref({ male: [], female: [], official_url: 'https://www.minimaxi.com/audio/voices' })
+const showVoicePicker = ref(false)
+
+const voicesForCurrentGender = computed(() =>
+  guestForm.value.gender === 'female' ? voiceLibrary.value.female : voiceLibrary.value.male
+)
+
+async function fetchVoiceLibrary() {
+  try {
+    const res = await fetch('/api/voices')
+    if (res.ok) voiceLibrary.value = await res.json()
+  } catch (e) {
+    console.warn('Failed to fetch voice library:', e)
+  }
+}
+
+async function generateGuestFromAI() {
+  if (!aiDescription.value.trim()) return
+  generatingGuest.value = true
+  try {
+    const res = await fetch('/api/guests/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ description: aiDescription.value.trim() })
+    })
+    if (!res.ok) {
+      const err = await res.json()
+      throw new Error(err?.detail || 'AI生成失败')
+    }
+    const profile = await res.json()
+    guestForm.value = {
+      name: profile.name || '',
+      gender: profile.gender || 'male',
+      age: profile.age || 30,
+      mbti: profile.mbti || '',
+      occupation: profile.occupation || '',
+      personality: profile.personality || '',
+      speaking_style: profile.speaking_style || '',
+      stance_bias: profile.stance_bias || '',
+      voice_id: profile.voice_id || '',
+      background: profile.background || ''
+    }
+  } catch (e) {
+    alert(e.message || 'AI生成失败，请重试')
+  } finally {
+    generatingGuest.value = false
+  }
+}
+
+function selectBuiltinVoice(voiceId) {
+  guestForm.value.voice_id = voiceId
+  showVoicePicker.value = false
+}
+
+onMounted(() => fetchVoiceLibrary())
+
 watch(() => props.modelValue, (val) => {
   if (!val) {
     resetState()
@@ -397,6 +533,8 @@ function resetState() {
   addingGuest.value = false
   expandedBadge.value = null
   guestForm.value = defaultForm()
+  showVoicePicker.value = false
+  aiDescription.value = ''
 }
 
 function close() {
@@ -428,6 +566,7 @@ function toggleSelect(name) {
 function startEdit(guest) {
   editingGuest.value = guest.name
   expandedBadge.value = null
+  showVoicePicker.value = false
   guestForm.value = {
     name: guest.name,
     gender: guest.gender,
@@ -1244,5 +1383,259 @@ function getAvatarGradient(mbti) {
   .drawer-panel { max-width: 100%; }
   .form-row { flex-direction: column; }
   .form-group.small { flex: 1; }
+}
+
+/* ─── AI Generation Panel ─────────────────────────────── */
+.ai-gen-panel {
+  margin: 0 1.25rem 0;
+  background: linear-gradient(135deg, rgba(99,102,241,0.06) 0%, rgba(168,85,247,0.06) 100%);
+  border: 1px dashed rgba(99,102,241,0.3);
+  border-radius: 12px;
+  padding: 0.875rem 1rem;
+}
+
+.ai-gen-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 0.6rem;
+}
+
+.ai-gen-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+  color: white;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+.ai-gen-hint {
+  font-size: 0.72rem;
+  color: #64748b;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-gen-input-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.ai-gen-textarea {
+  flex: 1;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 0.8rem;
+  font-family: inherit;
+  resize: none;
+  background: white;
+  transition: border-color 0.2s;
+  line-height: 1.5;
+  color: #1e293b;
+}
+
+.ai-gen-textarea:focus {
+  outline: none;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99,102,241,0.12);
+}
+
+.btn-ai-gen {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  align-self: flex-start;
+  margin-top: 1px;
+}
+
+.btn-ai-gen:hover:not(:disabled) {
+  box-shadow: 0 3px 10px rgba(99,102,241,0.35);
+  transform: translateY(-1px);
+}
+
+.btn-ai-gen:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.ai-gen-divider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 0.75rem;
+  color: #94a3b8;
+  font-size: 0.72rem;
+}
+
+.ai-gen-divider::before,
+.ai-gen-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: rgba(99,102,241,0.2);
+}
+
+/* ─── Voice Picker ────────────────────────────────────── */
+.voice-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.voice-official-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: #6366f1;
+  text-decoration: none;
+  margin-left: auto;
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid rgba(99,102,241,0.25);
+  transition: all 0.15s;
+}
+
+.voice-official-link:hover {
+  background: rgba(99,102,241,0.08);
+  border-color: #6366f1;
+}
+
+.voice-input-row {
+  display: flex;
+  gap: 6px;
+}
+
+.voice-input {
+  flex: 1;
+}
+
+.btn-voice-picker {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-voice-picker:hover,
+.btn-voice-picker--open {
+  border-color: #6366f1;
+  color: #6366f1;
+  background: rgba(99,102,241,0.06);
+}
+
+.btn-voice-picker svg {
+  transition: transform 0.2s;
+}
+
+.btn-voice-picker--open svg {
+  transform: rotate(180deg);
+}
+
+.voice-picker {
+  margin-top: 6px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: white;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+  overflow: hidden;
+}
+
+.voice-picker-header {
+  padding: 8px 12px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #64748b;
+  background: #f8fafc;
+  border-bottom: 1px solid #f1f5f9;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.voice-options {
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  gap: 2px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.voice-option {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 8px;
+  border: none;
+  background: transparent;
+  border-radius: 7px;
+  font-size: 0.78rem;
+  color: #374151;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s;
+}
+
+.voice-option:hover {
+  background: #f1f5f9;
+  color: #1e293b;
+}
+
+.voice-option--active {
+  background: rgba(99,102,241,0.1);
+  color: #6366f1;
+  font-weight: 500;
+}
+
+.voice-option span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.voice-more-link {
+  display: block;
+  padding: 8px 12px;
+  font-size: 0.75rem;
+  color: #6366f1;
+  text-decoration: none;
+  border-top: 1px solid #f1f5f9;
+  text-align: center;
+  font-weight: 500;
+  transition: background 0.15s;
+}
+
+.voice-more-link:hover {
+  background: rgba(99,102,241,0.05);
 }
 </style>

@@ -69,6 +69,43 @@ class ScriptSynthesisRequest(BaseModel):
     news_sources: list[dict] = Field(default_factory=list)
 
 
+class GuestGenerateRequest(BaseModel):
+    """Natural-language description used to AI-generate a guest profile."""
+    description: str = Field(..., min_length=5,
+                             description="用自然语言描述嘉宾特征，例如：一位30岁的女性AI产品经理，理性冷静，喜欢用数据说话")
+
+
+class VoiceLibraryResponse(BaseModel):
+    """Available built-in TTS voice IDs grouped by gender."""
+    male: list[str]
+    female: list[str]
+    official_url: str
+
+
+class AppSettingsOut(BaseModel):
+    """Sanitized application settings returned to frontend (keys masked)."""
+    llm_base_url: str
+    llm_api_key: str  # masked
+    llm_model: str
+    tavily_api_key: str  # masked
+    minimax_api_key: str  # masked
+    minimax_tts_model: str
+    minimax_tts_base_url: str
+    max_guests: int
+    cors_origins: list[str]
+
+
+class AppSettingsPatch(BaseModel):
+    """Partial settings update written to .env."""
+    llm_base_url: str | None = None
+    llm_api_key: str | None = None
+    llm_model: str | None = None
+    tavily_api_key: str | None = None
+    minimax_api_key: str | None = None
+    minimax_tts_model: str | None = None
+    minimax_tts_base_url: str | None = None
+
+
 # ---------------------------------------------------------------------------
 # Responses
 # ---------------------------------------------------------------------------

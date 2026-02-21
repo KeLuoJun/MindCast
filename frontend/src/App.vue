@@ -20,6 +20,13 @@
             </svg>
             首页
           </router-link>
+          <button class="nav-settings-btn" @click="settingsPanelOpen = true" title="系统配置">
+            <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>
+            </svg>
+            配置
+          </button>
         </nav>
       </div>
     </header>
@@ -41,10 +48,17 @@
         <p class="footer-copyright">© 2026 AI圆桌派 MVP · 基于 LangGraph + MiniMax TTS</p>
       </div>
     </footer>
+
+    <!-- Settings Panel -->
+    <SettingsPanel v-model="settingsPanelOpen" />
   </div>
 </template>
 
 <script setup>
+import { ref } from 'vue'
+import SettingsPanel from './components/SettingsPanel.vue'
+
+const settingsPanelOpen = ref(false)
 </script>
 
 <style>
@@ -205,6 +219,27 @@ body {
 .nav-link.active {
   background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
   color: var(--color-primary);
+}
+
+.nav-settings-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: var(--radius-md);
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all var(--transition-fast);
+}
+
+.nav-settings-btn:hover {
+  background: var(--color-border-light);
+  color: var(--color-text);
 }
 
 /* Main */
