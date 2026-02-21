@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import random
+import sys
 import time
 from pathlib import Path
 
@@ -312,7 +313,8 @@ def _attach_file_logger(episode_id: str) -> tuple[logging.Logger, str]:
     return logger, str(log_path)
 
 
-async def run_text_pipeline() -> Episode:
+async def run_text_pipeline(topic: str = "") -> Episode:
+    user_topic = topic.strip()
     runner = TextPipelineRunner()
 
     episode = Episode(guests=[g.persona.name for g in runner.guests])
@@ -328,7 +330,7 @@ async def run_text_pipeline() -> Episode:
     try:
         started = trace.start(
             "news", f"fetching news (max_results={MAX_NEWS_RESULTS})")
-        news_items = await runner._news.get_daily_ai_news(max_results=MAX_NEWS_RESULTS)
+        news_items = await runner._news.get_topic_news(topic=user_topic, max_results=MAX_NEWS_RESULTS)
         if not news_items:
             raise RuntimeError("No news items retrieved from Tavily")
         episode.news_sources = news_items
@@ -453,7 +455,8 @@ async def run_text_pipeline() -> Episode:
 
 def main() -> None:
     _setup_logging()
-    asyncio.run(run_text_pipeline())
+    topic = " ".join(sys.argv[1:]) if len(sys.argv) > 1 else ""
+    asyncio.run(run_text_pipeline(topic=topic))
 
 
 if __name__ == "__main__":

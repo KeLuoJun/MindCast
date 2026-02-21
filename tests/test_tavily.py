@@ -7,9 +7,9 @@ from backend.services.news_service import NewsService
 
 
 async def test_get_daily_news():
-    """Verify we can fetch daily AI news from Tavily."""
+    """Verify we can fetch topic news from Tavily."""
     service = NewsService()
-    items = await service.get_daily_ai_news(max_results=5)
+    items = await service.get_topic_news(topic="AI 人工智能", max_results=5)
 
     print(f"\n=== Fetched {len(items)} news items ===")
     for i, item in enumerate(items, 1):
