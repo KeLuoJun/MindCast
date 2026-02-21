@@ -410,7 +410,13 @@ function getAvatarGradient(mbti) {
 }
 
 function formatDate(iso) {
-  return new Date(iso).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
+  return new Date(iso).toLocaleString('zh-CN', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  })
 }
 
 function formatDuration(seconds) {

@@ -11,8 +11,8 @@
         <!-- Header -->
         <div class="drawer-header">
           <div class="header-title-group">
-            <h2>嘉宾配置</h2>
-            <p class="header-subtitle">管理播客嘉宾 · 最多选择 3 位</p>
+            <h2>嘉宾列表</h2>
+            <p class="header-subtitle">管理播客嘉宾</p>
           </div>
           <button class="btn-close" @click="close" title="关闭窗口">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -33,20 +33,14 @@
               <div
                 class="guest-card"
                 :class="{
-                  'guest-card--selected': selectedGuests.includes(guest.name),
                   'guest-card--expanded': expandedBadge === guest.name
                 }"
                 @click="toggleExpand(guest.name)"
               >
-                <!-- Avatar & Selection Indicator -->
-                <div class="avatar-check-container" @click.stop="toggleSelect(guest.name)">
+                <!-- Avatar -->
+                <div class="avatar-container">
                   <div class="guest-avatar" :style="{ background: getAvatarGradient(guest.mbti) }">
                     {{ guest.name.charAt(0) }}
-                  </div>
-                  <div class="select-indicator">
-                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="white" stroke-width="4">
-                      <polyline points="20,6 9,17 4,12"/>
-                    </svg>
                   </div>
                 </div>
 
@@ -211,17 +205,6 @@
             </div>
           </div>
         </div>
-
-        <!-- Footer -->
-        <div class="drawer-footer">
-          <button 
-            class="btn-confirm-selection" 
-            :disabled="selectedGuests.length === 0"
-            @click="close"
-          >
-            确认选择 ({{ selectedGuests.length }})
-          </button>
-        </div>
       </div>
     </transition>
 
@@ -385,19 +368,6 @@ function toggleExpand(name) {
   }
 }
 
-function toggleSelect(name) {
-  const current = [...props.selectedGuests]
-  const idx = current.indexOf(name)
-  if (idx >= 0) {
-    current.splice(idx, 1)
-  } else {
-    if (current.length < 3) {
-      current.push(name)
-    }
-  }
-  emit('update:selectedGuests', current)
-}
-
 function startEdit(guest) {
   editingGuest.value = guest.name
   expandedBadge.value = null
@@ -532,12 +502,6 @@ function getAvatarGradient(mbti) {
   background: linear-gradient(to bottom right, var(--c-surface), var(--c-bg));
 }
 
-.guest-card--selected {
-  border-color: var(--c-primary);
-  background: linear-gradient(135deg, var(--c-surface) 0%, rgba(255, 107, 53, 0.03) 100%);
-  box-shadow: 0 10px 25px -10px rgba(255, 107, 53, 0.15);
-}
-
 .guest-card--expanded {
   border-bottom-left-radius: 4px;
   border-bottom-right-radius: 4px;
@@ -545,8 +509,8 @@ function getAvatarGradient(mbti) {
   z-index: 10;
 }
 
-/* Avatar Selection Area */
-.avatar-check-container {
+/* Avatar Area */
+.avatar-container {
   position: relative;
   flex-shrink: 0;
 }
@@ -567,30 +531,6 @@ function getAvatarGradient(mbti) {
 
 .guest-card:hover .guest-avatar {
   transform: scale(1.05);
-}
-
-.select-indicator {
-  position: absolute;
-  top: -6px;
-  right: -6px;
-  width: 22px;
-  height: 22px;
-  background: var(--c-surface);
-  border: 2px solid var(--c-border);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: transparent;
-  transition: all var(--dur-fast) var(--ease);
-  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-}
-
-.guest-card--selected .select-indicator {
-  background: var(--c-primary);
-  border-color: var(--c-primary);
-  color: white;
-  transform: scale(1.1);
 }
 
 /* Card Content */
@@ -944,37 +884,6 @@ function getAvatarGradient(mbti) {
   flex: 1;
   overflow-y: auto;
   padding: 1.25rem;
-}
-
-.drawer-footer {
-  padding: 1.25rem;
-  background: var(--c-surface);
-  border-top: 2px solid var(--c-border);
-}
-
-.btn-confirm-selection {
-  width: 100%;
-  padding: 14px;
-  background: linear-gradient(135deg, var(--c-primary) 0%, #FF8F5F 100%);
-  color: white;
-  border: none;
-  border-radius: var(--r-xl);
-  font-size: 1rem;
-  font-weight: 800;
-  cursor: pointer;
-  box-shadow: 0 4px 20px rgba(255, 107, 53, 0.25);
-  transition: all 0.3s;
-}
-
-.btn-confirm-selection:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 30px rgba(255, 107, 53, 0.35);
-}
-
-.btn-confirm-selection:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  filter: grayscale(1);
 }
 
 /* Transitions */
