@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="generate-panel" v-if="taskId">
     <div class="studio-container">
       <!-- Header -->
@@ -18,83 +18,59 @@
           <div class="bg-grid"></div>
         </div>
         
-        <!-- Podium/Table -->
-        <div class="podium">
-          <div class="podium-surface">
-            <div class="podium-logo">
-              <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
-                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14.5H8v-5l3.5-3.5V16.5zm5 0h-3v-8.5l3.5 3.5v5z"/>
-              </svg>
+        <!-- Host Area -->
+        <div class="host-section">
+          <div class="person host" :class="{ speaking: isSpeaking('host') }">
+            <div class="avatar host-avatar">
+              <span class="avatar-emoji"></span>
+              <div class="mic-glow" v-if="isSpeaking('host')"></div>
+            </div>
+            <div class="person-info">
+              <span class="role">主持人</span>
+              <span class="name">林晨曦</span>
+            </div>
+            <div class="sound-bar" :class="{ active: isSpeaking('host') }">
+              <span></span><span></span><span></span><span></span>
             </div>
           </div>
-          <div class="podium-base"></div>
         </div>
 
-        <!-- Host -->
-        <div class="person host" :class="{ speaking: isSpeaking('host') }">
-          <div class="mic"></div>
-          <div class="avatar host-avatar">
-            <span class="avatar-emoji">🎙️</span>
-          </div>
-          <div class="person-info">
-            <span class="name">主持人</span>
-            <span class="role">林晨曦</span>
-          </div>
-          <div class="sound-bar" :class="{ active: isSpeaking('host') }">
-            <span></span><span></span><span></span>
+        <!-- Desktop Environment -->
+        <div class="studio-desk">
+          <div class="desk-surface">
+            <div class="desk-logo">MindCast</div>
           </div>
         </div>
 
-        <!-- Guest 1 -->
-        <div class="person guest-1" :class="{ speaking: isSpeaking('guest-a') }">
-          <div class="mic"></div>
-          <div class="avatar guest-1-avatar">
-            <span class="avatar-emoji">💻</span>
-          </div>
-          <div class="person-info">
-            <span class="name">技术专家</span>
-            <span class="role">赵明远</span>
-          </div>
-          <div class="sound-bar" :class="{ active: isSpeaking('guest-a') }">
-            <span></span><span></span><span></span>
-          </div>
-        </div>
-
-        <!-- Guest 2 -->
-        <div class="person guest-2" :class="{ speaking: isSpeaking('guest-b') }">
-          <div class="mic"></div>
-          <div class="avatar guest-2-avatar">
-            <span class="avatar-emoji">🚀</span>
-          </div>
-          <div class="person-info">
-            <span class="name">创业者</span>
-            <span class="role">苏婉清</span>
-          </div>
-          <div class="sound-bar" :class="{ active: isSpeaking('guest-b') }">
-            <span></span><span></span><span></span>
+        <!-- Guests Area -->
+        <div class="guests-section">
+          <div 
+            v-for="(guest, idx) in selectedGuestObjects" 
+            :key="guest.name"
+            class="person guest" 
+            :class="[`guest-${idx + 1}`, { speaking: isSpeaking(`guest-${idx}`) }]"
+          >
+            <div 
+              class="avatar guest-avatar" 
+              :style="{ background: getAvatarGradient(guest.mbti) }"
+            >
+              <span class="avatar-initial">{{ guest.name.charAt(0) }}</span>
+              <div class="mic-glow" v-if="isSpeaking(`guest-${idx}`)"></div>
+            </div>
+            <div class="person-info">
+              <span class="role">{{ guest.occupation }}</span>
+              <span class="name">{{ guest.name }}</span>
+            </div>
+            <div class="sound-bar" :class="{ active: isSpeaking(`guest-${idx}`) }">
+              <span></span><span></span><span></span><span></span>
+            </div>
           </div>
         </div>
 
-        <!-- Guest 3 -->
-        <div class="person guest-3" :class="{ speaking: isSpeaking('guest-c') }">
-          <div class="mic"></div>
-          <div class="avatar guest-3-avatar">
-            <span class="avatar-emoji">📚</span>
-          </div>
-          <div class="person-info">
-            <span class="name">伦理学家</span>
-            <span class="role">陈志恒</span>
-          </div>
-          <div class="sound-bar" :class="{ active: isSpeaking('guest-c') }">
-            <span></span><span></span><span></span>
-          </div>
-        </div>
-
-        <!-- Wave Animation -->
-        <div class="wave-container">
-          <div class="wave"></div>
-          <div class="wave"></div>
-          <div class="wave"></div>
+        <!-- Atmospheric Elements -->
+        <div class="studio-decorations">
+          <div class="lamp lamp-left"></div>
+          <div class="lamp lamp-right"></div>
         </div>
       </div>
 
@@ -158,9 +134,12 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useWorkflowStore } from '../stores/workflow'
 
 const props = defineProps({ taskId: String })
 const emit = defineEmits(['completed'])
+
+const store = useWorkflowStore()
 
 const stages = [
   { key: 'news', label: '获取资讯' },
@@ -182,6 +161,10 @@ const isCompleted = ref(false)
 let eventSource = null
 let speakerInterval = null
 
+const selectedGuestObjects = computed(() => {
+  return store.guests.filter(g => store.selectedGuests.includes(g.name))
+})
+
 const currentStageLabel = computed(() => {
   if (currentStage.value === 'cancelled') return '已终止'
   const stage = stages.find(s => s.key === currentStage.value)
@@ -201,13 +184,34 @@ function isSpeaking(participant) {
   return currentSpeaker.value === participant
 }
 
+function getAvatarGradient(mbti) {
+  const gradients = {
+    'INTJ': 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+    'INTP': 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
+    'ENTJ': 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+    'ENTP': 'linear-gradient(135deg, #ec4899 0%, #db2777 100%)',
+    'INFJ': 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+    'INFP': 'linear-gradient(135deg, #14b8a6 0%, #0d9488 100%)',
+    'ENFJ': 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)',
+    'ENFP': 'linear-gradient(135deg, #f43f5e 0%, #e11d48 100%)',
+    'ISTJ': 'linear-gradient(135deg, #64748b 0%, #475569 100%)',
+    'ISFJ': 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
+    'ESTJ': 'linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%)',
+    'ESFJ': 'linear-gradient(135deg, #a855f7 0%, #9333ea 100%)',
+    'ISTP': 'linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)',
+    'ISFP': 'linear-gradient(135deg, #84cc16 0%, #65a30d 100%)',
+    'ESTP': 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+    'ESFP': 'linear-gradient(135deg, #fb923c 0%, #f97316 100%)'
+  }
+  return gradients[mbti] || 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)'
+}
+
 function simulateSpeaking() {
-  const speakers = ['host', 'guest-a', 'guest-b', 'guest-c']
-  let idx = 0
   speakerInterval = setInterval(() => {
     if (currentStage.value === 'dialogue' || currentStage.value === 'audio') {
-      currentSpeaker.value = speakers[idx % speakers.length]
-      idx++
+      const participants = ['host', ...selectedGuestObjects.value.map((_, i) => `guest-${i}`)]
+      const randomIdx = Math.floor(Math.random() * participants.length)
+      currentSpeaker.value = participants[randomIdx]
     } else {
       currentSpeaker.value = ''
     }
@@ -309,7 +313,7 @@ onUnmounted(() => {
   overflow: hidden;
 }
 
-/* ── Header ── */
+/*  Header  */
 .studio-header {
   text-align: center;
   margin-bottom: 1.5rem;
@@ -354,195 +358,179 @@ onUnmounted(() => {
   font-size: 0.9rem;
 }
 
-/* ── Studio Scene ── */
+/*  Studio Scene  */
 .studio-scene {
   position: relative;
-  background: linear-gradient(180deg, var(--c-bg) 0%, var(--c-bg-warm) 100%);
-  border-radius: var(--r-lg);
-  border: 2px solid var(--c-border);
-  padding: 2rem 1.5rem;
-  min-height: 220px;
-  margin-bottom: 1.5rem;
+  background: linear-gradient(180deg, #fffcf9 0%, #fef3e7 100%);
+  border-radius: var(--r-xl);
+  border: 1px solid var(--c-border);
+  padding: 3rem 1.5rem 1rem;
+  min-height: 320px;
+  margin-bottom: 2rem;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .scene-bg {
   position: absolute;
   inset: 0;
+  pointer-events: none;
 }
 
 .bg-gradient {
   position: absolute;
-  top: -50%;
-  left: -20%;
-  width: 60%;
-  height: 100%;
-  background: radial-gradient(ellipse, rgba(255, 107, 53, 0.08) 0%, transparent 70%);
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 200px;
+  background: radial-gradient(circle at 50% 0%, rgba(255, 107, 53, 0.1) 0%, transparent 70%);
 }
 
 .bg-grid {
   position: absolute;
   inset: 0;
   background-image: 
-    linear-gradient(rgba(240, 224, 212, 0.5) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(240, 224, 212, 0.5) 1px, transparent 1px);
-  background-size: 20px 20px;
+    linear-gradient(rgba(240, 224, 212, 0.3) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(240, 224, 212, 0.3) 1px, transparent 1px);
+  background-size: 30px 30px;
 }
 
-/* ── Podium ── */
-.podium {
-  position: absolute;
-  bottom: 20px;
-  left: 50%;
-  transform: translateX(-50%);
+/*  Host & Guest Sections  */
+.host-section {
+  position: relative;
+  z-index: 5;
+  margin-bottom: 2rem;
+}
+
+.guests-section {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-.podium-surface {
-  width: 100px;
-  height: 16px;
-  background: linear-gradient(180deg, var(--c-border) 0%, var(--c-bg-warm) 100%);
-  border-radius: var(--r-sm) var(--r-sm) 0 0;
-}
-
-.podium-logo {
-  width: 32px;
-  height: 32px;
-  background: linear-gradient(135deg, var(--c-primary) 0%, var(--c-yellow) 100%);
-  border-radius: var(--r-sm);
-  display: flex;
-  align-items: center;
   justify-content: center;
-  color: white;
-  margin: -8px auto 0;
+  gap: 3rem;
+  width: 100%;
+  position: relative;
+  z-index: 5;
+  margin-bottom: 2.5rem;
 }
 
-.podium-base {
-  width: 80px;
-  height: 20px;
-  background: linear-gradient(180deg, var(--c-bg-warm) 0%, var(--c-border) 100%);
-  border-radius: 0 0 4px 4px;
-}
-
-/* ── People ── */
 .person {
-  position: absolute;
   display: flex;
   flex-direction: column;
   align-items: center;
-  transition: all var(--dur-normal) var(--ease-bounce);
+  transition: all 0.4s var(--ease-bounce);
 }
 
 .person.speaking {
-  transform: scale(1.05);
-}
-
-.host {
-  left: 50%;
-  top: 15%;
-  transform: translateX(-50%);
-}
-
-.host.speaking {
-  transform: translateX(-50%) scale(1.08);
-}
-
-.guest-1 {
-  left: 12%;
-  top: 45%;
-}
-
-.guest-2 {
-  left: 30%;
-  top: 65%;
-}
-
-.guest-3 {
-  right: 30%;
-  top: 65%;
-}
-
-.mic {
-  position: absolute;
-  top: -15px;
-  width: 16px;
-  height: 20px;
-  background: var(--c-text-2);
-  border-radius: var(--r-sm) var(--r-sm) 4px 4px;
-}
-
-.mic::after {
-  content: '';
-  position: absolute;
-  top: 4px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 6px;
-  height: 6px;
-  background: var(--c-text-3);
-  border-radius: 50%;
+  transform: translateY(-8px) scale(1.05);
 }
 
 .avatar {
-  width: 48px;
-  height: 48px;
+  position: relative;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 2px 8px rgba(45, 27, 14, 0.1);
-  transition: all var(--dur-normal) var(--ease-bounce);
+  box-shadow: 0 4px 15px rgba(45, 27, 14, 0.15);
+  border: 4px solid white;
 }
 
 .host-avatar {
-  width: 56px;
-  height: 56px;
+  width: 72px;
+  height: 72px;
   background: linear-gradient(135deg, var(--c-primary) 0%, var(--c-primary-hover) 100%);
 }
 
-.guest-1-avatar { background: linear-gradient(135deg, var(--c-blue) 0%, var(--c-accent) 100%); }
-.guest-2-avatar { background: linear-gradient(135deg, var(--c-yellow) 0%, var(--c-primary) 100%); }
-.guest-3-avatar { background: linear-gradient(135deg, var(--c-success) 0%, #047857 100%); }
+.guest-avatar {
+  width: 64px;
+  height: 64px;
+}
 
-.person.speaking .avatar {
-  box-shadow: 0 0 20px rgba(255, 107, 53, 0.4);
+.avatar-initial {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: white;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
 .avatar-emoji {
-  font-size: 1.25rem;
+  font-size: 2rem;
 }
 
-.host .avatar-emoji { font-size: 1.5rem; }
+.mic-glow {
+  position: absolute;
+  inset: -10px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 107, 53, 0.3) 0%, transparent 70%);
+  animation: glowPulse 2s infinite ease-in-out;
+}
+
+@keyframes glowPulse {
+  0% { transform: scale(0.9); opacity: 0.5; }
+  50% { transform: scale(1.1); opacity: 0.8; }
+  100% { transform: scale(0.9); opacity: 0.5; }
+}
 
 .person-info {
   text-align: center;
-  margin-top: 6px;
-}
-
-.person-info .name {
-  display: block;
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--c-text-1);
+  margin-top: 10px;
 }
 
 .person-info .role {
   display: block;
-  font-size: 0.65rem;
+  font-size: 0.7rem;
   color: var(--c-text-3);
+  margin-bottom: 2px;
 }
 
-/* ── Sound Bar ── */
+.person-info .name {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--c-text-1);
+}
+
+/*  Desktop UI  */
+.studio-desk {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 90%;
+  height: 80px;
+  perspective: 1000px;
+}
+
+.desk-surface {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(180deg, #f7f0e9 0%, #e8ddd1 100%);
+  border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+  border: 1px solid var(--c-border);
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  padding-bottom: 12px;
+}
+
+.desk-logo {
+  font-family: 'Inter', sans-serif;
+  font-weight: 900;
+  font-size: 12px;
+  letter-spacing: 4px;
+  color: rgba(45, 27, 14, 0.15);
+  text-transform: uppercase;
+}
+
+/*  Sound Bar  */
 .sound-bar {
   display: flex;
-  align-items: flex-end;
-  gap: 2px;
-  height: 12px;
-  margin-top: 4px;
+  align-items: center;
+  gap: 3px;
+  height: 20px;
+  margin-top: 8px;
   opacity: 0;
-  transition: opacity var(--dur-normal) ease;
+  transition: opacity 0.3s ease;
 }
 
 .sound-bar.active { opacity: 1; }
@@ -550,52 +538,49 @@ onUnmounted(() => {
 .sound-bar span {
   width: 3px;
   background: var(--c-primary);
-  border-radius: 2px;
-  animation: soundBar 0.4s ease-in-out infinite alternate;
+  border-radius: 4px;
 }
 
-.sound-bar span:nth-child(1) { height: 4px; animation-delay: 0s; }
-.sound-bar span:nth-child(2) { height: 8px; animation-delay: 0.1s; }
-.sound-bar span:nth-child(3) { height: 6px; animation-delay: 0.2s; }
+.speaking .sound-bar span:nth-child(1) { animation: soundWave 0.5s infinite ease-in-out alternate; }
+.speaking .sound-bar span:nth-child(2) { animation: soundWave 0.7s -0.2s infinite ease-in-out alternate; }
+.speaking .sound-bar span:nth-child(3) { animation: soundWave 0.4s -0.3s infinite ease-in-out alternate; }
+.speaking .sound-bar span:nth-child(4) { animation: soundWave 0.6s -0.1s infinite ease-in-out alternate; }
 
-@keyframes soundBar {
-  0% { transform: scaleY(0.5); }
-  100% { transform: scaleY(1); }
+@keyframes soundWave {
+  from { height: 4px; }
+  to { height: 16px; }
 }
 
-/* ── Wave ── */
-.wave-container {
+/*  Decor  */
+.studio-decorations .lamp {
   position: absolute;
-  bottom: 8px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  gap: 3px;
+  top: 20px;
+  width: 4px;
+  height: 100px;
+  background: linear-gradient(180deg, var(--c-border) 0%, transparent 100%);
 }
 
-.wave {
-  width: 3px;
-  height: 16px;
-  background: linear-gradient(180deg, var(--c-primary) 0%, var(--c-yellow) 100%);
-  border-radius: 2px;
-  animation: waveAnim 0.8s ease-in-out infinite;
+.lamp-left { left: 40px; }
+.lamp-right { right: 40px; }
+
+.lamp::before {
+  content: '';
+  position: absolute;
+  top: -10px;
+  left: -8px;
+  width: 20px;
+  height: 20px;
+  background: white;
+  border-radius: 50%;
+  box-shadow: 0 0 20px rgba(255, 107, 53, 0.2);
 }
 
-.wave:nth-child(1) { animation-delay: 0s; }
-.wave:nth-child(2) { animation-delay: 0.15s; }
-.wave:nth-child(3) { animation-delay: 0.3s; }
-
-@keyframes waveAnim {
-  0%, 100% { transform: scaleY(0.5); opacity: 0.4; }
-  50% { transform: scaleY(1); opacity: 1; }
-}
-
-/* ── Progress ── */
+/*  Progress  */
 .progress-bar {
   display: flex;
   justify-content: space-between;
-  margin-bottom: 1.25rem;
-  position: relative;
+  margin-bottom: 2rem;
+  padding: 0 1rem;
 }
 
 .progress-step {
@@ -607,23 +592,24 @@ onUnmounted(() => {
 }
 
 .step-dot {
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   background: var(--c-bg);
   border: 2px solid var(--c-border);
-  transition: all var(--dur-normal) var(--ease-bounce);
-  z-index: 1;
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  z-index: 2;
+  color: transparent;
 }
 
 .progress-step.active .step-dot {
   background: var(--c-primary);
   border-color: var(--c-primary);
-  color: white;
-  box-shadow: 0 0 12px rgba(255, 107, 53, 0.4);
+  transform: scale(1.2);
+  box-shadow: 0 0 15px rgba(255, 107, 53, 0.3);
 }
 
 .progress-step.completed .step-dot {
@@ -633,15 +619,15 @@ onUnmounted(() => {
 }
 
 .step-label {
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   color: var(--c-text-3);
-  margin-top: 6px;
-  text-align: center;
+  margin-top: 10px;
+  font-weight: 500;
 }
 
 .progress-step.active .step-label {
   color: var(--c-primary);
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .progress-step.completed .step-label {
@@ -650,69 +636,68 @@ onUnmounted(() => {
 
 .step-line {
   position: absolute;
-  top: 12px;
-  left: calc(50% + 14px);
-  right: calc(-50% + 14px);
+  top: 14px;
+  left: 55%;
+  width: 90%;
   height: 2px;
   background: var(--c-border);
+  z-index: 1;
 }
 
 .step-line.filled {
   background: var(--c-success);
 }
 
-/* ── Status ── */
+/*  Status Bar  */
 .status-box {
+  background: #fdfaf7;
+  border: 1px solid #eee1d7;
+  border-radius: var(--r-xl);
+  padding: 1rem 1.25rem;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 10px;
-  padding: 0.875rem 1rem;
-  background: var(--c-bg);
-  border: 2px solid var(--c-border);
-  border-radius: var(--r-md);
+  gap: 1rem;
 }
 
 .status-icon {
-  width: 32px;
-  height: 32px;
-  background: var(--c-primary-soft);
-  border-radius: var(--r-sm);
+  width: 40px;
+  height: 40px;
+  background: white;
+  border: 1px solid #eee1d7;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.02);
+  border-radius: 12px;
+  color: var(--c-primary);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--c-primary);
-  flex-shrink: 0;
 }
 
 .status-text {
-  color: var(--c-text-2);
-  font-size: 0.85rem;
   flex: 1;
+  font-size: 0.9rem;
+  color: var(--c-text-2);
+  line-height: 1.5;
 }
 
 .btn-cancel {
-  padding: 6px 12px;
-  border: 2px solid var(--c-border);
+  padding: 6px 16px;
+  border: 1px solid #eee1d7;
   border-radius: var(--r-full);
-  background: var(--c-surface);
+  background: white;
   color: var(--c-text-2);
-  font-size: 0.78rem;
+  font-size: 0.8rem;
   font-weight: 600;
-  font-family: var(--font-sans);
   cursor: pointer;
-  transition: all var(--dur-fast) var(--ease);
+  transition: all 0.2s ease;
 }
 
 .btn-cancel:hover:not(:disabled) {
   border-color: var(--c-primary);
   color: var(--c-primary);
-  background: var(--c-primary-soft);
 }
 
 .btn-cancel:disabled {
-  opacity: 0.6;
+  opacity: 0.5;
   cursor: not-allowed;
 }
 
@@ -720,93 +705,69 @@ onUnmounted(() => {
   color: #ef4444;
   font-size: 0.85rem;
   font-weight: 500;
-  width: 100%;
+  margin-top: 4px;
 }
 
-/* ── Completion ── */
+/*  Completion  */
 .complete-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(255, 245, 237, 0.95);
+  background: rgba(255, 252, 249, 0.9);
+  backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 10;
+  z-index: 20;
 }
 
 .complete-box {
   text-align: center;
-  animation: popIn 0.4s var(--ease-bounce);
-}
-
-@keyframes popIn {
-  0% { transform: scale(0.8); opacity: 0; }
-  50% { transform: scale(1.05); }
-  100% { transform: scale(1); opacity: 1; }
 }
 
 .complete-icon {
-  width: 80px;
-  height: 80px;
-  background: linear-gradient(135deg, var(--c-success) 0%, #059669 100%);
+  width: 64px;
+  height: 64px;
+  background: var(--c-success);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
   margin: 0 auto 1rem;
-  box-shadow: 0 4px 20px rgba(46, 204, 113, 0.3);
+  box-shadow: 0 4px 15px rgba(46, 204, 113, 0.3);
 }
 
 .complete-box h4 {
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: var(--c-text-1);
-  margin-bottom: 0.25rem;
+  font-size: 1.2rem;
+  margin-bottom: 0.5rem;
 }
 
-.complete-box p {
-  color: var(--c-text-3);
-  font-size: 0.9rem;
+/*  Transitions  */
+.fade-enter-active, .fade-leave-active {
+  transition: opacity 0.4s ease;
 }
-
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity var(--dur-normal) ease;
-}
-
-.fade-enter-from,
-.fade-leave-to {
+.fade-enter-from, .fade-leave-to {
   opacity: 0;
 }
 
-/* ── Responsive ── */
-@media (max-width: 700px) {
-  .studio-scene {
-    min-height: 180px;
-    padding: 1.5rem 1rem;
+@media (max-width: 600px) {
+  .guests-section {
+    gap: 1rem;
+    flex-wrap: wrap;
   }
-  
-  .host { top: 12%; }
-  .guest-1 { left: 5%; top: 40%; }
-  .guest-2 { left: 25%; top: 60%; }
-  .guest-3 { right: 25%; top: 60%; }
-  
   .avatar {
-    width: 36px;
-    height: 36px;
+    width: 48px;
+    height: 48px;
   }
-  
   .host-avatar {
-    width: 44px;
-    height: 44px;
+    width: 60px;
+    height: 60px;
   }
-  
-  .avatar-emoji { font-size: 1rem; }
-  .host .avatar-emoji { font-size: 1.25rem; }
-  
+  .studio-scene {
+    min-height: 400px;
+  }
   .step-label {
-    font-size: 0.6rem;
+    display: none;
   }
 }
 </style>
