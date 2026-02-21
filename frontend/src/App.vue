@@ -4,48 +4,45 @@
       <div class="header-content">
         <router-link to="/" class="logo">
           <div class="logo-icon">
-            <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
-              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14.5H8v-5l3.5-3.5V16.5zm5 0h-3v-8.5l3.5 3.5v5z"/>
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5">
+              <circle cx="12" cy="12" r="10"/>
+              <path d="M9.5 8.5v7l6-3.5z" fill="currentColor" stroke="none"/>
             </svg>
           </div>
           <div class="logo-text">
-            <h1>圆桌派</h1>
+            <span class="logo-name">圆桌派</span>
+            <span class="logo-sub">ROUNDTABLE</span>
           </div>
         </router-link>
         <nav class="header-nav">
           <router-link to="/" class="nav-link" :class="{ active: $route.path === '/' }">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
               <polyline points="9,22 9,12 15,12 15,22"/>
             </svg>
-            首页
+            工作台
           </router-link>
           <button class="nav-settings-btn" @click="settingsPanelOpen = true" title="系统配置">
-            <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="12" cy="12" r="3"/>
               <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>
             </svg>
-            配置
           </button>
         </nav>
       </div>
     </header>
     
     <main class="app-main">
-      <router-view v-slot="{ Component }">
-        <transition name="fade" mode="out-in">
-          <component :is="Component" />
-        </transition>
+      <router-view v-slot="{ Component, route }">
+        <keep-alive :include="['Home']">
+          <component :is="Component" :key="route.fullPath" />
+        </keep-alive>
       </router-view>
     </main>
     
     <footer class="app-footer">
       <div class="footer-content">
-        <div class="footer-brand">
-          <span class="brand-text">圆桌派</span>
-          <p class="footer-desc">多智能体协作生成 · 深度资讯解读与多元观点碰撞</p>
-        </div>
-        <p class="footer-copyright">© 2026 圆桌派 MVP · 基于 LangGraph + MiniMax TTS</p>
+        <span class="footer-copyright">© 2026 圆桌派 · LangGraph + MiniMax TTS</span>
       </div>
     </footer>
 
@@ -62,64 +59,61 @@ const settingsPanelOpen = ref(false)
 </script>
 
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600;700&family=Inter:wght@400;500;600;700&display=swap');
 
 :root {
-  /* Primary Colors */
-  --color-primary: #6366f1;
-  --color-primary-dark: #4f46e5;
-  --color-primary-light: #818cf8;
-  --color-accent: #a855f7;
-  --color-accent-warm: #f59e0b;
-  
-  /* Light Theme - Soft Gradient Background */
-  --color-bg: #f8f9fc;
-  --color-bg-gradient: linear-gradient(135deg, #f8f9fc 0%, #f0f4ff 50%, #faf5ff 100%);
-  --color-bg-secondary: #ffffff;
-  --color-bg-card: #ffffff;
-  --color-bg-elevated: #ffffff;
-  
-  /* Text Colors */
-  --color-text: #1e293b;
-  --color-text-secondary: #64748b;
-  --color-text-muted: #94a3b8;
-  
-  /* Border */
-  --color-border: #e2e8f0;
-  --color-border-light: #f1f5f9;
-  
-  /* Status Colors */
-  --color-success: #10b981;
-  --color-warning: #f59e0b;
-  --color-error: #ef4444;
-  
-  /* Typography */
-  --font-sans: 'Plus Jakarta Sans', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
-  
-  /* Border Radius */
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
-  --radius-xl: 24px;
-  --radius-full: 9999px;
-  
-  /* Shadows */
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.06);
-  --shadow-md: 0 4px 12px rgba(99, 102, 241, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04);
-  --shadow-lg: 0 12px 32px rgba(99, 102, 241, 0.12), 0 4px 8px rgba(0, 0, 0, 0.04);
-  --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.06);
-  
-  /* Glassmorphism */
-  --glass-bg: rgba(255, 255, 255, 0.7);
-  --glass-bg-strong: rgba(255, 255, 255, 0.85);
-  --glass-border: rgba(255, 255, 255, 0.5);
-  --glass-shadow: 0 8px 32px rgba(31, 38, 135, 0.1);
-  --glass-blur: blur(16px);
-  
-  /* Transitions */
-  --transition-fast: 150ms ease;
-  --transition-normal: 250ms ease;
-  --transition-slow: 400ms ease;
+  /* ── Core Palette: Warm Indigo + Amber ── */
+  --c-primary: #5b5bd6;
+  --c-primary-hover: #4e4ec9;
+  --c-primary-soft: rgba(91, 91, 214, 0.08);
+  --c-primary-muted: rgba(91, 91, 214, 0.15);
+  --c-accent: #e5a23c;
+  --c-accent-soft: rgba(229, 162, 60, 0.1);
+  --c-success: #18a058;
+  --c-error: #d03050;
+  --c-warning: #f0a020;
+
+  /* ── Surface system ── */
+  --c-bg: #fafbfc;
+  --c-bg-warm: #faf8f5;
+  --c-surface: #ffffff;
+  --c-surface-raised: #ffffff;
+  --c-surface-overlay: rgba(255, 255, 255, 0.92);
+
+  /* ── Text ── */
+  --c-text-1: #1a1a2e;
+  --c-text-2: #5c6370;
+  --c-text-3: #9ca3af;
+  --c-text-inv: #ffffff;
+
+  /* ── Border ── */
+  --c-border: #e8e8ec;
+  --c-border-light: #f0f0f3;
+  --c-divider: #f5f5f7;
+
+  /* ── Typography ── */
+  --font-sans: 'Inter', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-display: 'Noto Sans SC', 'Inter', sans-serif;
+
+  /* ── Radii ── */
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --r-xl: 20px;
+  --r-full: 9999px;
+
+  /* ── Shadows ── */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.08);
+  --shadow-focus: 0 0 0 3px rgba(91, 91, 214, 0.2);
+
+  /* ── Timing ── */
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --dur-fast: 150ms;
+  --dur-normal: 250ms;
+  --dur-slow: 400ms;
 }
 
 * {
@@ -130,10 +124,8 @@ const settingsPanelOpen = ref(false)
 
 body {
   font-family: var(--font-sans);
-  background: var(--color-bg);
-  background-image: var(--color-bg-gradient);
-  background-attachment: fixed;
-  color: var(--color-text);
+  background: var(--c-bg);
+  color: var(--c-text-1);
   line-height: 1.6;
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
@@ -146,21 +138,22 @@ body {
   min-height: 100vh;
 }
 
-/* Header */
+/* ── Header ── */
 .app-header {
   position: sticky;
   top: 0;
   z-index: 100;
-  background: rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--color-border);
-  box-shadow: var(--shadow-sm);
+  background: var(--c-surface-overlay);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border-bottom: 1px solid var(--c-border);
 }
 
 .header-content {
-  max-width: 1100px;
+  max-width: 1080px;
   margin: 0 auto;
-  padding: 0.875rem 1.5rem;
+  padding: 0 1.5rem;
+  height: 56px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -171,136 +164,117 @@ body {
   align-items: center;
   gap: 10px;
   text-decoration: none;
+  color: var(--c-text-1);
 }
 
 .logo-icon {
-  width: 40px;
-  height: 40px;
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-  border-radius: var(--radius-md);
+  width: 34px;
+  height: 34px;
+  background: var(--c-primary);
+  border-radius: var(--r-md);
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
 }
 
-.logo-text h1 {
-  font-size: 1.25rem;
+.logo-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+}
+
+.logo-name {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
   font-weight: 700;
-  color: var(--color-text);
-  letter-spacing: -0.02em;
+  letter-spacing: -0.01em;
+}
+
+.logo-sub {
+  font-size: 0.55rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: var(--c-text-3);
+  text-transform: uppercase;
 }
 
 .header-nav {
   display: flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: 2px;
 }
 
 .nav-link {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  border-radius: var(--radius-md);
-  color: var(--color-text-secondary);
+  gap: 5px;
+  padding: 6px 12px;
+  border-radius: var(--r-md);
+  color: var(--c-text-2);
   text-decoration: none;
-  font-size: 0.9rem;
+  font-size: 0.82rem;
   font-weight: 500;
-  transition: all var(--transition-fast);
+  transition: all var(--dur-fast) var(--ease);
 }
 
 .nav-link:hover {
-  background: var(--color-border-light);
-  color: var(--color-text);
+  background: var(--c-border-light);
+  color: var(--c-text-1);
 }
 
 .nav-link.active {
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
-  color: var(--color-primary);
+  background: var(--c-primary-soft);
+  color: var(--c-primary);
 }
 
 .nav-settings-btn {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  border-radius: var(--radius-md);
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--r-md);
   border: none;
   background: transparent;
-  color: var(--color-text-secondary);
-  font-size: 0.9rem;
-  font-weight: 500;
+  color: var(--c-text-3);
   cursor: pointer;
   font-family: inherit;
-  transition: all var(--transition-fast);
+  transition: all var(--dur-fast) var(--ease);
 }
 
 .nav-settings-btn:hover {
-  background: var(--color-border-light);
-  color: var(--color-text);
+  background: var(--c-border-light);
+  color: var(--c-text-2);
 }
 
-/* Main */
+/* ── Main ── */
 .app-main {
   flex: 1;
-  max-width: 1100px;
+  max-width: 1080px;
   margin: 0 auto;
-  padding: 2.5rem 1.5rem;
+  padding: 2rem 1.5rem;
   width: 100%;
 }
 
-/* Footer */
+/* ── Footer ── */
 .app-footer {
-  background: white;
-  border-top: 1px solid var(--color-border);
-  padding: 2.5rem 1.5rem 2rem;
+  border-top: 1px solid var(--c-border);
+  padding: 1.25rem 1.5rem;
 }
 
 .footer-content {
-  max-width: 1100px;
+  max-width: 1080px;
   margin: 0 auto;
   text-align: center;
 }
 
-.footer-brand {
-  margin-bottom: 1rem;
-}
-
-.brand-text {
-  font-weight: 600;
-  color: var(--color-text);
-}
-
-.footer-desc {
-  color: var(--color-text-muted);
-  font-size: 0.85rem;
-  margin-top: 0.25rem;
-}
-
 .footer-copyright {
-  color: var(--color-text-muted);
-  font-size: 0.8rem;
+  color: var(--c-text-3);
+  font-size: 0.75rem;
 }
 
-/* Transitions */
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.2s ease, transform 0.2s ease;
-}
-
-.fade-enter-from {
-  opacity: 0;
-  transform: translateY(8px);
-}
-
-.fade-leave-to {
-  opacity: 0;
-  transform: translateY(-8px);
-}
-
-/* Scrollbar */
+/* ── Scrollbar ── */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -311,17 +285,24 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: #d1d5db;
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: #9ca3af;
 }
 
-/* Selection */
 ::selection {
-  background: rgba(99, 102, 241, 0.2);
-  color: var(--color-text);
+  background: rgba(91, 91, 214, 0.15);
+}
+
+/* ── Utility classes ── */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s var(--ease);
+}
+.fade-enter-from, .fade-leave-to {
+  opacity: 0;
 }
 </style>

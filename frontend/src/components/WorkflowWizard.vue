@@ -6,17 +6,17 @@
         v-for="(step, idx) in steps"
         :key="step.key"
         class="progress-step"
-        :class="{ active: currentStep === idx, completed: currentStep > idx }"
+        :class="{ active: store.currentStep === idx, completed: store.currentStep > idx }"
         @click="goToStep(idx)"
       >
         <div class="step-indicator">
-          <svg v-if="currentStep > idx" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3">
+          <svg v-if="store.currentStep > idx" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3">
             <polyline points="20,6 9,17 4,12"/>
           </svg>
           <span v-else>{{ idx + 1 }}</span>
         </div>
         <span class="step-label">{{ step.label }}</span>
-        <div v-if="idx < steps.length - 1" class="step-line" :class="{ filled: currentStep > idx }"></div>
+        <div v-if="idx < steps.length - 1" class="step-line" :class="{ filled: store.currentStep > idx }"></div>
       </div>
     </div>
 
@@ -24,7 +24,7 @@
     <div class="wizard-content">
       <!-- Step 1: Fetch News -->
       <transition name="slide-up" mode="out-in">
-        <div v-if="currentStep === 0" class="step-panel" key="step-news">
+        <div v-if="store.currentStep === 0" class="step-panel" key="step-news">
           <div class="step-header">
             <div class="step-icon news">
               <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
@@ -41,42 +41,42 @@
           <div class="topic-input-group">
             <label class="topic-label">话题方向</label>
             <input
-              v-model="topicQuery"
+              v-model="store.topicQuery"
               type="text"
               class="topic-input"
               placeholder="例如：量子计算、新能源汽车、教育改革…（留空则获取综合热点）"
-              @keyup.enter="fetchNews"
+              @keyup.enter="store.fetchNews"
             />
           </div>
 
-          <button class="btn-fetch" :disabled="fetchingNews" @click="fetchNews">
-            <span v-if="fetchingNews" class="spinner"></span>
+          <button class="btn-fetch" :disabled="store.fetchingNews" @click="store.fetchNews">
+            <span v-if="store.fetchingNews" class="spinner"></span>
             <svg v-else viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M23 4v6h-6"/>
               <path d="M1 20v-6h6"/>
               <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
             </svg>
-            {{ fetchingNews ? '获取中...' : '立即获取资讯' }}
+            {{ store.fetchingNews ? '获取中...' : '立即获取资讯' }}
           </button>
 
           <transition name="fade">
-            <div v-if="newsContent" class="news-result">
+            <div v-if="store.newsContent" class="news-result">
               <div class="result-header">
                 <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
                   <polyline points="20,6 9,17 4,12"/>
                 </svg>
-                已获取 {{ newsContent.count }} 篇资讯
+                已获取 {{ store.newsContent.count }} 篇资讯
               </div>
               <div class="news-list">
                 <div
-                  v-for="(item, idx) in newsContent.items"
+                  v-for="(item, idx) in store.newsContent.items"
                   :key="idx"
                   class="news-item"
-                  :class="{ selected: selectedTopic === item.title }"
-                  @click="selectTopic(item.title)"
+                  :class="{ selected: store.selectedTopic === item.title }"
+                  @click="store.selectTopic(item.title)"
                 >
                   <div class="news-radio">
-                    <div class="radio-dot" :class="{ active: selectedTopic === item.title }"></div>
+                    <div class="radio-dot" :class="{ active: store.selectedTopic === item.title }"></div>
                   </div>
                   <div class="news-content">
                     <h4>{{ item.title }}</h4>
@@ -84,7 +84,7 @@
                   </div>
                 </div>
               </div>
-              <button class="btn-next" :disabled="!hasNews" @click="nextStep">
+              <button class="btn-next" :disabled="!store.hasNews" @click="nextStep">
                 下一步：选择嘉宾
                 <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
                   <line x1="5" y1="12" x2="19" y2="12"/>
@@ -96,7 +96,7 @@
         </div>
 
         <!-- Step 2: Select Guests -->
-        <div v-else-if="currentStep === 1" class="step-panel" key="step-guests">
+        <div v-else-if="store.currentStep === 1" class="step-panel" key="step-guests">
           <div class="step-header">
             <div class="step-icon guests">
               <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
@@ -110,7 +110,7 @@
               <h2>选择嘉宾</h2>
               <p>选择本期节目的嘉宾（最多 3 位）</p>
             </div>
-            <button class="btn-config" @click="$emit('openGuestDrawer')">
+            <button class="btn-config" @click="store.guestDrawerOpen = true">
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
                 <circle cx="12" cy="12" r="3"/>
                 <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/>
@@ -120,7 +120,7 @@
           </div>
 
           <div class="guest-selection">
-            <div v-if="guests.length === 0" class="empty-guests">
+            <div v-if="store.guests.length === 0" class="empty-guests">
               <div class="empty-icon">
                 <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5">
                   <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
@@ -128,16 +128,16 @@
                 </svg>
               </div>
               <p>暂无嘉宾，请先创建嘉宾</p>
-              <button class="btn-add" @click="$emit('openGuestDrawer')">创建嘉宾</button>
+              <button class="btn-add" @click="store.guestDrawerOpen = true">创建嘉宾</button>
             </div>
 
             <div v-else class="guest-cards">
               <div
-                v-for="guest in guests"
+                v-for="guest in store.guests"
                 :key="guest.name"
                 class="guest-card"
-                :class="{ selected: selectedGuests.includes(guest.name) }"
-                @click="toggleGuest(guest.name)"
+                :class="{ selected: store.selectedGuests.includes(guest.name) }"
+                @click="store.toggleGuest(guest.name)"
               >
                 <div class="guest-avatar" :style="{ background: getAvatarGradient(guest.mbti) }">
                   {{ guest.name.charAt(0) }}
@@ -148,7 +148,7 @@
                   <span class="occupation">{{ guest.occupation }}</span>
                 </div>
                 <div class="selection-check">
-                  <svg v-if="selectedGuests.includes(guest.name)" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3">
+                  <svg v-if="store.selectedGuests.includes(guest.name)" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3">
                     <polyline points="20,6 9,17 4,12"/>
                   </svg>
                 </div>
@@ -164,7 +164,7 @@
               </svg>
               返回
             </button>
-            <button class="btn-next" :disabled="selectedGuests.length === 0" @click="nextStep">
+            <button class="btn-next" :disabled="store.selectedGuests.length === 0" @click="nextStep">
               下一步：生成播客
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
                 <line x1="5" y1="12" x2="19" y2="12"/>
@@ -175,7 +175,7 @@
         </div>
 
         <!-- Step 3: Generate -->
-        <div v-else-if="currentStep === 2" class="step-panel" key="step-generate">
+        <div v-else-if="store.currentStep === 2" class="step-panel" key="step-generate">
           <div class="step-header">
             <div class="step-icon generate">
               <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
@@ -193,14 +193,14 @@
           <!-- Topic Summary -->
           <div class="topic-summary">
             <div class="summary-label">当前话题</div>
-            <div class="summary-value">{{ effectiveTopic }}</div>
+            <div class="summary-value">{{ store.effectiveTopic }}</div>
           </div>
 
           <!-- Guests Summary -->
           <div class="guests-summary">
             <div class="summary-label">已选嘉宾</div>
             <div class="guests-tags">
-              <span v-for="name in selectedGuests" :key="name" class="guest-tag">
+              <span v-for="name in store.selectedGuests" :key="name" class="guest-tag">
                 {{ getGuestName(name) }}
               </span>
             </div>
@@ -210,8 +210,8 @@
           <div class="mode-toggle">
             <button
               class="mode-btn"
-              :class="{ active: workflowMode === 'one-click' }"
-              @click="workflowMode = 'one-click'"
+              :class="{ active: store.workflowMode === 'one-click' }"
+              @click="store.workflowMode = 'one-click'"
             >
               <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
                 <polygon points="5,3 19,12 5,21"/>
@@ -220,8 +220,8 @@
             </button>
             <button
               class="mode-btn"
-              :class="{ active: workflowMode === 'step-by-step' }"
-              @click="workflowMode = 'step-by-step'"
+              :class="{ active: store.workflowMode === 'step-by-step' }"
+              @click="store.workflowMode = 'step-by-step'"
             >
               <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
                 <line x1="8" y1="6" x2="21" y2="6"/>
@@ -233,31 +233,31 @@
           </div>
 
           <!-- One-Click Mode -->
-          <div v-if="workflowMode === 'one-click'" class="generate-action">
-            <button class="btn-generate" :disabled="!canGenerate || generating" @click="startGenerate">
-              <span v-if="generating" class="spinner"></span>
+          <div v-if="store.workflowMode === 'one-click'" class="generate-action">
+            <button class="btn-generate" :disabled="!store.canGenerate || store.generating" @click="store.startGenerate">
+              <span v-if="store.generating" class="spinner"></span>
               <svg v-else viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
                 <polygon points="5,3 19,12 5,21"/>
               </svg>
-              {{ generating ? '生成中...' : '开始生成播客' }}
+              {{ store.generating ? '生成中...' : '开始生成播客' }}
             </button>
           </div>
 
           <!-- Step-by-Step Mode -->
           <div v-else class="step-by-step">
-            <button class="btn-generate-outline" :disabled="!canGenerate || generatingScript" @click="generateScriptPreview">
-              <span v-if="generatingScript" class="spinner"></span>
-              {{ generatingScript ? '生成中...' : '生成文稿预览' }}
+            <button class="btn-generate-outline" :disabled="!store.canGenerate || store.generatingScript" @click="store.generateScriptPreview">
+              <span v-if="store.generatingScript" class="spinner"></span>
+              {{ store.generatingScript ? '生成中...' : '生成文稿预览' }}
             </button>
 
             <transition name="fade">
-              <div v-if="hasScriptDraft" class="script-preview">
+              <div v-if="store.hasScriptDraft" class="script-preview">
                 <div class="preview-header">
-                  <h3>{{ scriptDraft.title }}</h3>
-                  <p>{{ scriptDraft.summary }}</p>
+                  <h3>{{ store.scriptDraft.title }}</h3>
+                  <p>{{ store.scriptDraft.summary }}</p>
                 </div>
                 <div class="dialogue-list">
-                  <div v-for="(line, idx) in scriptDraft.dialogue" :key="idx" class="dialogue-item">
+                  <div v-for="(line, idx) in store.scriptDraft.dialogue" :key="idx" class="dialogue-item">
                     <div class="speaker">
                       <span class="avatar" :class="getSpeakerClass(line.speaker)">{{ line.speaker.charAt(0) }}</span>
                       <span class="name">{{ line.speaker }}</span>
@@ -265,9 +265,9 @@
                     <textarea v-model="line.text" rows="2" placeholder="编辑对话..."></textarea>
                   </div>
                 </div>
-                <button class="btn-confirm-synth" :disabled="synthesizing" @click="confirmScriptSynthesis">
-                  <span v-if="synthesizing" class="spinner"></span>
-                  {{ synthesizing ? '合成中...' : '确认并合成语音' }}
+                <button class="btn-confirm-synth" :disabled="store.synthesizing" @click="store.confirmScriptSynthesis">
+                  <span v-if="store.synthesizing" class="spinner"></span>
+                  {{ store.synthesizing ? '合成中...' : '确认并合成语音' }}
                 </button>
               </div>
             </transition>
@@ -287,20 +287,15 @@
     </div>
 
     <!-- Generate Panel (when generating) -->
-    <GeneratePanel v-if="taskId" :task-id="taskId" @completed="onGenerateCompleted" />
+    <GeneratePanel v-if="store.taskId" :task-id="store.taskId" @completed="store.onGenerateCompleted" />
   </div>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { useWorkflowStore } from '../stores/workflow'
 import GeneratePanel from './GeneratePanel.vue'
 
-const props = defineProps({
-  guests: { type: Array, default: () => [] },
-  selectedGuests: { type: Array, default: () => [] }
-})
-
-const emit = defineEmits(['openGuestDrawer', 'update:selectedGuests'])
+const store = useWorkflowStore()
 
 const steps = [
   { key: 'news', label: '获取资讯' },
@@ -308,89 +303,18 @@ const steps = [
   { key: 'generate', label: '生成播客' }
 ]
 
-const currentStep = ref(0)
-const workflowMode = ref('one-click')
-const newsContent = ref(null)
-const selectedTopic = ref('')
-const customTopic = ref('')
-const topicQuery = ref('')
-const fetchingNews = ref(false)
-const generating = ref(false)
-const generatingScript = ref(false)
-const synthesizing = ref(false)
-const taskId = ref(null)
-const scriptDraft = ref(null)
-
-const hasNews = computed(() => newsContent.value !== null)
-const effectiveTopic = computed(() => customTopic.value || selectedTopic.value || '')
-const hasScriptDraft = computed(() => scriptDraft.value && scriptDraft.value.dialogue?.length > 0)
-const canGenerate = computed(() => hasNews.value && !!effectiveTopic.value && selectedGuests.value.length > 0)
-
-const selectedGuests = computed({
-  get: () => props.selectedGuests,
-  set: (val) => emit('update:selectedGuests', val)
-})
-
 function goToStep(idx) {
-  if (idx < currentStep.value) {
-    currentStep.value = idx
-  }
+  if (idx < store.currentStep) store.currentStep = idx
 }
-
 function nextStep() {
-  if (currentStep.value < steps.length - 1) {
-    currentStep.value++
-  }
+  if (store.currentStep < steps.length - 1) store.currentStep++
 }
-
 function prevStep() {
-  if (currentStep.value > 0) {
-    currentStep.value--
-  }
-}
-
-async function fetchNews() {
-  fetchingNews.value = true
-  try {
-    const params = new URLSearchParams({ max_results: '10' })
-    if (topicQuery.value.trim()) {
-      params.set('topic', topicQuery.value.trim())
-    }
-    const res = await fetch(`/api/debug/news?${params}`)
-    const data = await res.json()
-    newsContent.value = {
-      count: data.count || 0,
-      items: data.items || []
-    }
-    if (newsContent.value.items.length > 0) {
-      selectedTopic.value = newsContent.value.items[0].title
-    }
-    customTopic.value = ''
-  } catch (e) {
-    console.error('Failed to fetch news:', e)
-  } finally {
-    fetchingNews.value = false
-  }
-}
-
-function selectTopic(title) {
-  selectedTopic.value = title
-  customTopic.value = ''
-}
-
-function toggleGuest(name) {
-  const current = [...selectedGuests.value]
-  const idx = current.indexOf(name)
-  if (idx >= 0) {
-    current.splice(idx, 1)
-  } else if (current.length < 3) {
-    current.push(name)
-  }
-  selectedGuests.value = current
+  if (store.currentStep > 0) store.currentStep--
 }
 
 function getGuestName(name) {
-  const guest = props.guests.find(g => g.name === name)
+  const guest = store.guests.find(g => g.name === name)
   return guest ? guest.name : name
 }
 
@@ -424,104 +348,14 @@ function getSpeakerClass(speaker) {
   return 'guest'
 }
 
-async function startGenerate() {
-  if (!canGenerate.value) return
-  generating.value = true
-  try {
-    const res = await fetch('/api/generate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        topic: effectiveTopic.value,
-        selected_guests: selectedGuests.value
-      })
-    })
-    const data = await res.json()
-    taskId.value = data.task_id
-  } catch (e) {
-    console.error('Failed to start generation:', e)
-    generating.value = false
-  }
-}
-
-async function generateScriptPreview() {
-  if (!canGenerate.value) return
-  generatingScript.value = true
-  try {
-    const res = await fetch('/api/script/preview', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        topic: effectiveTopic.value,
-        selected_guests: selectedGuests.value
-      })
-    })
-    const data = await res.json()
-    scriptDraft.value = {
-      title: data.title || data.topic || '',
-      topic: data.topic || '',
-      summary: data.summary || '',
-      guests: data.guests || [],
-      dialogue: (data.dialogue || []).map(line => ({
-        speaker: line.speaker,
-        text: line.text,
-        emotion: line.emotion || 'neutral'
-      }))
-    }
-  } catch (e) {
-    console.error('Failed to generate script preview:', e)
-  } finally {
-    generatingScript.value = false
-  }
-}
-
-async function confirmScriptSynthesis() {
-  if (!hasScriptDraft.value) return
-  synthesizing.value = true
-  try {
-    const payload = {
-      title: scriptDraft.value.title,
-      topic: scriptDraft.value.topic,
-      summary: scriptDraft.value.summary,
-      guests: scriptDraft.value.guests,
-      dialogue: scriptDraft.value.dialogue
-        .map(line => ({ speaker: line.speaker, text: line.text?.trim(), emotion: line.emotion }))
-        .filter(line => line.text)
-    }
-    const res = await fetch('/api/script/synthesize', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    })
-    const data = await res.json()
-    taskId.value = data.task_id
-  } catch (e) {
-    console.error('Failed to start synthesis:', e)
-    synthesizing.value = false
-  }
-}
-
-function onGenerateCompleted() {
-  generating.value = false
-  synthesizing.value = false
-  taskId.value = null
-  emit('completed')
-}
-
-// Expose for parent
-defineExpose({
-  fetchNews,
-  nextStep,
-  prevStep
-})
+defineExpose({ nextStep, prevStep })
 </script>
 
 <style scoped>
 .workflow-wizard {
-  background: var(--glass-bg);
-  backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-xl);
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-xl);
   overflow: hidden;
 }
 
@@ -530,8 +364,8 @@ defineExpose({
   display: flex;
   align-items: center;
   padding: 1.25rem 1.5rem;
-  background: var(--glass-bg-strong);
-  border-bottom: 1px solid var(--glass-border);
+  background: var(--c-bg);
+  border-bottom: 1px solid var(--c-border);
 }
 
 .progress-step {
@@ -556,50 +390,50 @@ defineExpose({
   justify-content: center;
   font-size: 0.8rem;
   font-weight: 600;
-  background: var(--color-border-light);
-  color: var(--color-text-muted);
-  border: 2px solid var(--color-border);
-  transition: all var(--transition-normal);
+  background: var(--c-bg);
+  color: var(--c-text-3);
+  border: 2px solid var(--c-border);
+  transition: all var(--dur-normal) var(--ease);
   flex-shrink: 0;
 }
 
 .progress-step.active .step-indicator {
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%);
-  border-color: var(--color-primary);
+  background: var(--c-primary);
+  border-color: var(--c-primary);
   color: white;
-  box-shadow: 0 0 12px rgba(99, 102, 241, 0.4);
+  box-shadow: 0 0 12px rgba(91, 91, 214, 0.35);
 }
 
 .progress-step.completed .step-indicator {
-  background: var(--color-success);
-  border-color: var(--color-success);
+  background: var(--c-success);
+  border-color: var(--c-success);
   color: white;
 }
 
 .step-label {
   font-size: 0.85rem;
   font-weight: 500;
-  color: var(--color-text-muted);
+  color: var(--c-text-3);
   white-space: nowrap;
 }
 
 .progress-step.active .step-label {
-  color: var(--color-primary);
+  color: var(--c-primary);
 }
 
 .progress-step.completed .step-label {
-  color: var(--color-success);
+  color: var(--c-success);
 }
 
 .step-line {
   flex: 1;
   height: 2px;
-  background: var(--color-border);
+  background: var(--c-border);
   margin: 0 12px;
 }
 
 .step-line.filled {
-  background: var(--color-success);
+  background: var(--c-success);
 }
 
 /* Content */
@@ -622,7 +456,7 @@ defineExpose({
 .step-icon {
   width: 48px;
   height: 48px;
-  border-radius: var(--radius-md);
+  border-radius: var(--r-md);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -630,29 +464,29 @@ defineExpose({
 }
 
 .step-icon.news {
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(99, 102, 241, 0.08) 100%);
-  color: var(--color-primary);
+  background: var(--c-primary-soft);
+  color: var(--c-primary);
 }
 
 .step-icon.guests {
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(16, 185, 129, 0.08) 100%);
-  color: var(--color-success);
+  background: rgba(16, 185, 129, 0.12);
+  color: var(--c-success);
 }
 
 .step-icon.generate {
-  background: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(245, 158, 11, 0.08) 100%);
-  color: var(--color-accent-warm);
+  background: rgba(229, 162, 60, 0.12);
+  color: var(--c-accent);
 }
 
 .step-header h2 {
   font-size: 1.15rem;
   font-weight: 600;
-  color: var(--color-text);
+  color: var(--c-text-1);
 }
 
 .step-header p {
   font-size: 0.85rem;
-  color: var(--color-text-muted);
+  color: var(--c-text-3);
 }
 
 .btn-config {
@@ -661,19 +495,19 @@ defineExpose({
   align-items: center;
   gap: 6px;
   padding: 8px 14px;
-  border: 1px solid var(--color-border);
-  background: white;
-  border-radius: var(--radius-md);
+  border: 1px solid var(--c-border);
+  background: var(--c-surface);
+  border-radius: var(--r-md);
   font-size: 0.8rem;
   font-weight: 500;
-  color: var(--color-text-secondary);
+  color: var(--c-text-2);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: all var(--dur-fast) var(--ease);
 }
 
 .btn-config:hover {
-  border-color: var(--color-primary);
-  color: var(--color-primary);
+  border-color: var(--c-primary);
+  color: var(--c-primary);
 }
 
 /* Topic Input */
@@ -685,29 +519,30 @@ defineExpose({
   display: block;
   font-size: 0.85rem;
   font-weight: 600;
-  color: var(--color-text-secondary);
+  color: var(--c-text-2);
   margin-bottom: 8px;
 }
 
 .topic-input {
   width: 100%;
   padding: 12px 16px;
-  background: var(--color-bg-elevated, rgba(255,255,255,0.06));
-  border: 1px solid var(--color-border, rgba(255,255,255,0.1));
-  border-radius: var(--radius-md);
+  background: var(--c-bg);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
   font-size: 0.95rem;
-  color: var(--color-text-primary);
+  color: var(--c-text-1);
   outline: none;
-  transition: border-color var(--transition-fast);
+  transition: border-color var(--dur-fast) var(--ease);
   box-sizing: border-box;
 }
 
 .topic-input::placeholder {
-  color: var(--color-text-tertiary, rgba(255,255,255,0.35));
+  color: var(--c-text-3);
 }
 
 .topic-input:focus {
-  border-color: var(--color-primary);
+  border-color: var(--c-primary);
+  box-shadow: var(--shadow-focus);
 }
 
 /* Fetch Button */
@@ -717,18 +552,18 @@ defineExpose({
   justify-content: center;
   gap: 10px;
   padding: 14px 24px;
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
+  background: var(--c-primary);
   color: white;
   border: none;
-  border-radius: var(--radius-md);
+  border-radius: var(--r-md);
   font-size: 0.95rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: all var(--dur-fast) var(--ease);
 }
 
 .btn-fetch:hover:not(:disabled) {
-  transform: translateY(-1px);
+  background: var(--c-primary-hover);
   box-shadow: var(--shadow-md);
 }
 
@@ -739,9 +574,9 @@ defineExpose({
 
 /* News Result */
 .news-result {
-  background: var(--glass-bg-strong);
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-lg);
+  background: var(--c-bg);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-lg);
   padding: 1.25rem;
 }
 
@@ -751,7 +586,7 @@ defineExpose({
   gap: 6px;
   font-size: 0.85rem;
   font-weight: 600;
-  color: var(--color-success);
+  color: var(--c-success);
   margin-bottom: 1rem;
 }
 
@@ -769,20 +604,20 @@ defineExpose({
   align-items: flex-start;
   gap: 10px;
   padding: 0.75rem;
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-md);
-  background: white;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
+  background: var(--c-surface);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: all var(--dur-fast) var(--ease);
 }
 
 .news-item:hover {
-  border-color: var(--color-primary-light);
+  border-color: var(--c-primary);
 }
 
 .news-item.selected {
-  border-color: var(--color-primary);
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.05) 0%, rgba(139, 92, 246, 0.05) 100%);
+  border-color: var(--c-primary);
+  background: var(--c-primary-soft);
 }
 
 .news-radio {
@@ -793,37 +628,37 @@ defineExpose({
 .radio-dot {
   width: 18px;
   height: 18px;
-  border: 2px solid var(--color-border);
+  border: 2px solid var(--c-border);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all var(--transition-fast);
+  transition: all var(--dur-fast) var(--ease);
 }
 
 .radio-dot.active {
-  border-color: var(--color-primary);
+  border-color: var(--c-primary);
 }
 
 .radio-dot.active::after {
   content: '';
   width: 8px;
   height: 8px;
-  background: var(--color-primary);
+  background: var(--c-primary);
   border-radius: 50%;
 }
 
 .news-content h4 {
   font-size: 0.9rem;
   font-weight: 600;
-  color: var(--color-text);
+  color: var(--c-text-1);
   margin-bottom: 0.25rem;
   line-height: 1.4;
 }
 
 .news-content p {
   font-size: 0.75rem;
-  color: var(--color-text-muted);
+  color: var(--c-text-3);
   line-height: 1.5;
 }
 
@@ -835,33 +670,33 @@ defineExpose({
 .empty-guests {
   text-align: center;
   padding: 2rem;
-  background: var(--color-border-light);
-  border-radius: var(--radius-lg);
+  background: var(--c-bg);
+  border-radius: var(--r-lg);
 }
 
 .empty-guests .empty-icon {
   width: 64px;
   height: 64px;
   margin: 0 auto 1rem;
-  background: white;
+  background: var(--c-surface);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--color-text-muted);
+  color: var(--c-text-3);
 }
 
 .empty-guests p {
-  color: var(--color-text-muted);
+  color: var(--c-text-3);
   margin-bottom: 1rem;
 }
 
 .btn-add {
   padding: 10px 20px;
-  background: var(--color-primary);
+  background: var(--c-primary);
   color: white;
   border: none;
-  border-radius: var(--radius-md);
+  border-radius: var(--r-md);
   font-weight: 500;
   cursor: pointer;
 }
@@ -877,29 +712,28 @@ defineExpose({
   align-items: center;
   gap: 12px;
   padding: 1rem;
-  background: var(--glass-bg-strong);
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-lg);
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-lg);
   cursor: pointer;
-  transition: all var(--transition-normal);
+  transition: all var(--dur-fast) var(--ease);
   position: relative;
 }
 
 .guest-card:hover {
-  border-color: var(--color-primary-light);
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
+  border-color: var(--c-primary);
+  box-shadow: var(--shadow-sm);
 }
 
 .guest-card.selected {
-  border-color: var(--color-primary);
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(139, 92, 246, 0.08) 100%);
+  border-color: var(--c-primary);
+  background: var(--c-primary-soft);
 }
 
 .guest-avatar {
   width: 44px;
   height: 44px;
-  border-radius: var(--radius-md);
+  border-radius: var(--r-md);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -917,30 +751,30 @@ defineExpose({
 .guest-info h4 {
   font-size: 0.9rem;
   font-weight: 600;
-  color: var(--color-text);
+  color: var(--c-text-1);
   margin-bottom: 2px;
 }
 
 .guest-info .mbti {
   display: inline-block;
   padding: 1px 6px;
-  background: rgba(99, 102, 241, 0.1);
+  background: rgba(91, 91, 214, 0.1);
   border-radius: 4px;
   font-size: 0.65rem;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--c-primary);
   margin-right: 6px;
 }
 
 .guest-info .occupation {
   font-size: 0.75rem;
-  color: var(--color-text-muted);
+  color: var(--c-text-3);
 }
 
 .selection-check {
   width: 24px;
   height: 24px;
-  border: 2px solid var(--color-border);
+  border: 2px solid var(--c-border);
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -949,8 +783,8 @@ defineExpose({
 }
 
 .guest-card.selected .selection-check {
-  background: var(--color-primary);
-  border-color: var(--color-primary);
+  background: var(--c-primary);
+  border-color: var(--c-primary);
   color: white;
 }
 
@@ -966,18 +800,18 @@ defineExpose({
   align-items: center;
   gap: 6px;
   padding: 10px 16px;
-  border: 1px solid var(--color-border);
-  background: white;
-  border-radius: var(--radius-md);
+  border: 1px solid var(--c-border);
+  background: var(--c-surface);
+  border-radius: var(--r-md);
   font-size: 0.85rem;
   font-weight: 500;
-  color: var(--color-text-secondary);
+  color: var(--c-text-2);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: all var(--dur-fast) var(--ease);
 }
 
 .btn-back:hover {
-  background: var(--color-border-light);
+  background: var(--c-bg);
 }
 
 .btn-next {
@@ -985,18 +819,17 @@ defineExpose({
   align-items: center;
   gap: 8px;
   padding: 10px 20px;
-  background: linear-gradient(135deg, var(--color-success) 0%, #059669 100%);
+  background: var(--c-success);
   color: white;
   border: none;
-  border-radius: var(--radius-md);
+  border-radius: var(--r-md);
   font-size: 0.85rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: all var(--dur-fast) var(--ease);
 }
 
 .btn-next:hover:not(:disabled) {
-  transform: translateY(-1px);
   box-shadow: var(--shadow-md);
 }
 
@@ -1009,21 +842,21 @@ defineExpose({
 .topic-summary,
 .guests-summary {
   padding: 1rem;
-  background: var(--glass-bg-strong);
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-md);
+  background: var(--c-bg);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
 }
 
 .summary-label {
   font-size: 0.75rem;
-  color: var(--color-text-muted);
+  color: var(--c-text-3);
   margin-bottom: 0.5rem;
 }
 
 .summary-value {
   font-size: 0.95rem;
   font-weight: 600;
-  color: var(--color-text);
+  color: var(--c-text-1);
 }
 
 .guests-tags {
@@ -1034,18 +867,18 @@ defineExpose({
 
 .guest-tag {
   padding: 4px 10px;
-  background: rgba(99, 102, 241, 0.1);
-  border-radius: var(--radius-sm);
+  background: var(--c-primary-soft);
+  border-radius: var(--r-sm);
   font-size: 0.8rem;
   font-weight: 500;
-  color: var(--color-primary);
+  color: var(--c-primary);
 }
 
 /* Mode Toggle */
 .mode-toggle {
   display: flex;
-  background: var(--color-border-light);
-  border-radius: var(--radius-md);
+  background: var(--c-bg);
+  border-radius: var(--r-md);
   padding: 4px;
 }
 
@@ -1058,17 +891,17 @@ defineExpose({
   padding: 12px;
   border: none;
   background: transparent;
-  color: var(--color-text-muted);
-  border-radius: var(--radius-sm);
+  color: var(--c-text-3);
+  border-radius: var(--r-sm);
   font-size: 0.85rem;
   font-weight: 500;
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: all var(--dur-fast) var(--ease);
 }
 
 .mode-btn.active {
-  background: white;
-  color: var(--color-primary);
+  background: var(--c-surface);
+  color: var(--c-primary);
   box-shadow: var(--shadow-sm);
 }
 
@@ -1085,14 +918,14 @@ defineExpose({
   justify-content: center;
   gap: 10px;
   padding: 16px 32px;
-  background: linear-gradient(135deg, var(--color-accent-warm) 0%, #d97706 100%);
+  background: var(--c-accent);
   color: white;
   border: none;
-  border-radius: var(--radius-md);
+  border-radius: var(--r-md);
   font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: all var(--dur-fast) var(--ease);
 }
 
 .btn-generate:hover:not(:disabled) {
@@ -1112,44 +945,44 @@ defineExpose({
   gap: 10px;
   width: 100%;
   padding: 14px;
-  background: white;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
   font-size: 0.9rem;
   font-weight: 500;
-  color: var(--color-text);
+  color: var(--c-text-1);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: all var(--dur-fast) var(--ease);
 }
 
 .btn-generate-outline:hover:not(:disabled) {
-  border-color: var(--color-primary);
-  color: var(--color-primary);
+  border-color: var(--c-primary);
+  color: var(--c-primary);
 }
 
 /* Script Preview */
 .script-preview {
-  background: white;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-lg);
   padding: 1.25rem;
 }
 
 .preview-header {
   margin-bottom: 1rem;
   padding-bottom: 1rem;
-  border-bottom: 1px solid var(--color-border-light);
+  border-bottom: 1px solid var(--c-border);
 }
 
 .preview-header h3 {
   font-size: 1rem;
   font-weight: 600;
-  color: var(--color-text);
+  color: var(--c-text-1);
 }
 
 .preview-header p {
   font-size: 0.85rem;
-  color: var(--color-text-secondary);
+  color: var(--c-text-2);
   margin-top: 0.25rem;
 }
 
@@ -1188,21 +1021,21 @@ defineExpose({
   color: white;
 }
 
-.avatar.host { background: linear-gradient(135deg, var(--color-primary), var(--color-accent)); }
+.avatar.host { background: linear-gradient(135deg, var(--c-primary), var(--c-accent)); }
 .avatar.tech { background: linear-gradient(135deg, #3b82f6, #1d4ed8); }
-.avatar.pm { background: linear-gradient(135deg, var(--color-accent-warm), #b45309); }
-.avatar.ethics { background: linear-gradient(135deg, var(--color-success), #047857); }
+.avatar.pm { background: linear-gradient(135deg, var(--c-accent), #b45309); }
+.avatar.ethics { background: linear-gradient(135deg, var(--c-success), #047857); }
 .avatar.guest { background: linear-gradient(135deg, #64748b, #475569); }
 
 .speaker .name {
   font-size: 0.65rem;
-  color: var(--color-text-muted);
+  color: var(--c-text-3);
 }
 
 .dialogue-item textarea {
   flex: 1;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-sm);
   padding: 0.5rem;
   font-size: 0.8rem;
   resize: none;
@@ -1210,7 +1043,7 @@ defineExpose({
 
 .dialogue-item textarea:focus {
   outline: none;
-  border-color: var(--color-primary);
+  border-color: var(--c-primary);
 }
 
 .btn-confirm-synth {
@@ -1220,18 +1053,17 @@ defineExpose({
   gap: 8px;
   width: 100%;
   padding: 12px;
-  background: linear-gradient(135deg, var(--color-success) 0%, #059669 100%);
+  background: var(--c-success);
   color: white;
   border: none;
-  border-radius: var(--radius-md);
+  border-radius: var(--r-md);
   font-size: 0.9rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: all var(--dur-fast) var(--ease);
 }
 
 .btn-confirm-synth:hover:not(:disabled) {
-  transform: translateY(-1px);
   box-shadow: var(--shadow-md);
 }
 
