@@ -58,6 +58,17 @@
       <PodcastPlayer v-if="episode.has_audio" :episode-id="episode.id" />
     </div>
 
+    <!-- Deep-read article -->
+    <section v-if="episode.article" class="article-section">
+      <div class="section-header">
+        <h2>深度阅读</h2>
+        <p class="section-desc">AI 编辑基于本期内容撰写的独立文章，适合深度阅读</p>
+      </div>
+      <div class="article-card">
+        <div class="article-body" v-html="articleHtml"></div>
+      </div>
+    </section>
+
     <!-- Dialogue transcript -->
     <section class="transcript-section">
       <div class="section-header">
@@ -119,7 +130,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import PodcastPlayer from '../components/PodcastPlayer.vue'
 
 const props = defineProps({ id: String })
@@ -157,6 +168,36 @@ function getSpeakerClass(speaker) {
   }
   return speakerColors[speaker]
 }
+
+/** Convert the article plain-text (with basic Markdown) to safe HTML. */
+const articleHtml = computed(() => {
+  const text = episode.value?.article || ''
+  if (!text) return ''
+
+  const escape = (s) =>
+    s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+  const inlineFormat = (s) =>
+    escape(s)
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.+?)\*/g, '<em>$1</em>')
+      .replace(/`(.+?)`/g, '<code>$1</code>')
+
+  const blocks = text.split(/\n{2,}/)
+  return blocks
+    .map((block) => {
+      const trimmed = block.trim()
+      if (!trimmed) return ''
+      if (trimmed.startsWith('#### ')) return `<h4>${inlineFormat(trimmed.slice(5))}</h4>`
+      if (trimmed.startsWith('### '))  return `<h3>${inlineFormat(trimmed.slice(4))}</h3>`
+      if (trimmed.startsWith('## '))   return `<h2>${inlineFormat(trimmed.slice(3))}</h2>`
+      if (trimmed.startsWith('# '))    return `<h1>${inlineFormat(trimmed.slice(2))}</h1>`
+      // multi-line inside a block → join with <br>
+      const lines = trimmed.split('\n').map(inlineFormat).join('<br>')
+      return `<p>${lines}</p>`
+    })
+    .join('')
+})
 
 onMounted(fetchEpisode)
 </script>
@@ -265,6 +306,83 @@ onMounted(fetchEpisode)
 
 .player-wrapper {
   margin-bottom: 2.5rem;
+}
+
+/* ── Article section ── */
+.article-section {
+  margin-top: 3rem;
+}
+
+.article-card {
+  background: white;
+  border-radius: 20px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+  padding: 2.5rem 3rem;
+  border-top: 4px solid #6366f1;
+}
+
+.article-body {
+  color: #1f2937;
+  font-size: 1.05rem;
+  line-height: 2;
+  font-family: 'Georgia', 'Noto Serif SC', serif;
+}
+
+.article-body :deep(h1) {
+  font-size: 1.7rem;
+  font-weight: 700;
+  color: #111827;
+  margin: 0 0 1.25rem;
+  line-height: 1.35;
+  letter-spacing: -0.02em;
+}
+
+.article-body :deep(h2) {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: #1f2937;
+  margin: 2.5rem 0 1rem;
+  padding-left: 0.8rem;
+  border-left: 3px solid #6366f1;
+}
+
+.article-body :deep(h3) {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #374151;
+  margin: 2rem 0 0.75rem;
+}
+
+.article-body :deep(h4) {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #4b5563;
+  margin: 1.5rem 0 0.5rem;
+}
+
+.article-body :deep(p) {
+  margin: 0 0 1.4em;
+  text-align: justify;
+  text-indent: 2em;
+}
+
+.article-body :deep(strong) {
+  color: #111827;
+  font-weight: 700;
+}
+
+.article-body :deep(em) {
+  font-style: italic;
+  color: #4b5563;
+}
+
+.article-body :deep(code) {
+  background: #f3f4f6;
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+  font-size: 0.9em;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  color: #6366f1;
 }
 
 .transcript-section,

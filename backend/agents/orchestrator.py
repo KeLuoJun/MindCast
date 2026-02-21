@@ -85,6 +85,7 @@ class PodcastOrchestrator:
         graph.add_node("retrieve_rag", self._node_retrieve_rag)
         graph.add_node("plan_episode", self._node_plan_episode)
         graph.add_node("generate_dialogue", self._node_generate_dialogue)
+        graph.add_node("generate_article", self._node_generate_article)
         graph.add_node("synthesize_tts", self._node_synthesize_tts)
         graph.add_node("stitch_audio", self._node_stitch_audio)
         graph.add_node("save_episode", self._node_save_episode)
@@ -95,7 +96,8 @@ class PodcastOrchestrator:
         graph.add_edge("deep_research", "retrieve_rag")
         graph.add_edge("retrieve_rag", "plan_episode")
         graph.add_edge("plan_episode", "generate_dialogue")
-        graph.add_edge("generate_dialogue", "synthesize_tts")
+        graph.add_edge("generate_dialogue", "generate_article")
+        graph.add_edge("generate_article", "synthesize_tts")
         graph.add_edge("synthesize_tts", "stitch_audio")
         graph.add_edge("stitch_audio", "save_episode")
         graph.add_edge("save_episode", END)
@@ -464,6 +466,101 @@ class PodcastOrchestrator:
             payload={"audio_path": str(output_path),
                      "duration_seconds": duration},
         )
+        return {"episode": episode}
+
+    async def _node_generate_article(self, state: OrchestratorState) -> OrchestratorState:
+        """Generate a high-quality long-form article based on the episode content."""
+        episode = state["episode"]
+        plan = state.get("plan")
+        detailed_info: list[DetailedInfo] = state.get("detailed_info", [])
+        dialogue = state.get("dialogue", [])
+
+        await self._emit_progress(state, "article", "正在撰写本期深度文章…")
+
+        try:
+            # Build context from research and dialogue
+            research_summary = "\n".join(
+                f"【{info.query}】\n{info.answer or ''}\n"
+                + "\n".join(
+                    f"- {r.title}: {r.content[:200]}"
+                    for r in (info.results or [])[:3]
+                )
+                for info in detailed_info
+            )
+            talking_points = plan.talking_point_texts() if plan else []
+            dialogue_excerpt = "\n".join(
+                f"{line.speaker}：{line.text}" for line in dialogue[:40]
+            )
+            guest_names = "、".join(episode.guests) if episode.guests else "嘉宾"
+
+            system_prompt = f"""你是一位精通科技与社会议题的中文深度内容编辑，擅长将播客讨论提炼为独立成篇的高质量文章。
+你的写作风格：
+- 观点鲜明、逻辑严密，有自己的判断和立场
+- 用具体案例、数据和类比解释复杂概念
+- 语言克制有力，不用空洞词汇
+- 结构清晰但不生硬，行文流畅自然
+- 适合发布在《晚点LatePost》《虎嗅》《36氪》等深度科技媒体
+
+【⛔ 绝对禁止的写作痕迹】
+- 三段式"第一……第二……第三"
+- "值得注意的是"、"不可忽视"、"此外"、"与此同时"、"综上所述"
+- "赋能"、"打造"、"引领"、"助力"、"深耕"
+- "让我们拭目以待"、"未来可期"
+- 每句话长度接近、节奏单调
+- 空洞总结段（要么给新洞察，要么不总结）"""
+
+            user_prompt = f"""本期播客主题：{episode.topic}
+
+【节目梗概】
+{episode.summary}
+
+【讨论脉络】
+{chr(10).join(f'· {pt}' for pt in talking_points)}
+
+【研究背景资料】
+{research_summary[:3000]}
+
+【部分对话精华】
+{dialogue_excerpt}
+
+请根据以上内容，以**独立文章**的形式撰写一篇1500-2500字的深度文章。
+
+要求：
+1. 文章要能独立成篇，读者无需听播客也能完整理解
+2. 不要描述"本期节目讨论了……"——直接切入话题本身
+3. 文章结构自由，但逻辑线索清晰：通常包含核心观点引入、多角度分析、现实影响/启示
+4. 提炼播客中最有价值的洞见，加入必要的背景知识和你自己的分析判断
+5. 参考 {guest_names} 在对话中的核心论点，但以你自己的叙事语言转化，不要像"摘要"或"采访综述"
+6. 标题要吸引眼球，能准确传达文章核心角度（可以用副标题补充）
+7. 直接输出文章全文（含标题），不要有任何前缀说明
+
+现在开始写作："""
+
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ]
+            article_text = await self._llm.chat(
+                messages, temperature=0.75, max_tokens=3000
+            )
+            article_text = (article_text or "").strip()
+
+            episode.article = article_text
+            logger.info(
+                "Article generated for episode %s (%d chars)",
+                episode.id,
+                len(article_text),
+            )
+            await self._emit_progress(
+                state,
+                "article",
+                f"深度文章撰写完成（{len(article_text)} 字）",
+                payload={"article_length": len(article_text)},
+            )
+        except Exception as exc:
+            logger.warning("Article generation failed: %s", exc)
+            episode.article = ""
+
         return {"episode": episode}
 
     async def _node_save_episode(self, state: OrchestratorState) -> OrchestratorState:
@@ -1077,4 +1174,3 @@ class PodcastOrchestrator:
             return []
         start = round_idx % n
         return guest_names[start:] + guest_names[:start]
-

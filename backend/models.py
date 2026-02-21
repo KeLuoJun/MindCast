@@ -160,6 +160,7 @@ class Episode(BaseModel):
     generation_log_path: str | None = None
     duration_seconds: float | None = None
     word_count: int = 0
+    article: str = ""  # High-quality long-form article generated after episode
 
     def save_json(self, output_dir: Path) -> Path:
         """Persist episode metadata as JSON."""

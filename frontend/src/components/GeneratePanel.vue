@@ -160,6 +160,7 @@ const stages = [
   { key: 'research', label: '深度搜索' },
   { key: 'planning', label: '节目策划' },
   { key: 'dialogue', label: '生成文本' },
+  { key: 'article', label: '撰写文章' },
   { key: 'audio', label: '音频拼接' },
   { key: 'done', label: '完成' },
 ]

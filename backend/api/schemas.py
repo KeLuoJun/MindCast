@@ -149,3 +149,4 @@ class EpisodeDetail(BaseModel):
     has_audio: bool
     dialogue: list[DialogueLineOut]
     news_sources: list[dict]
+    article: str = ""

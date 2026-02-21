@@ -663,6 +663,7 @@ async def get_episode(episode_id: str):
             for d in ep.dialogue
         ],
         news_sources=[s.model_dump() for s in ep.news_sources],
+        article=ep.article,
     )
 
 
