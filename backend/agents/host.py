@@ -50,7 +50,7 @@ class HostAgent(BaseAgent):
             f"- {topic}" for topic in recent_topics[:20]
         ) or "（暂无往期话题）"
 
-        prompt = f"""以下是今天获取到的{len(news_list)}条AI相关资讯：
+        prompt = f"""以下是今天获取到的{len(news_list)}条相关资讯：
 
 {news_summary}
 
@@ -66,9 +66,10 @@ class HostAgent(BaseAgent):
 - 能否形成至少两种不同立场的碰撞？
 - 是否有反直觉角度可挖？
 
-二、深度讨论空间
+二、深度讨论空间（弗赖塔格金字塔式结构检验）
 - 是否支持多角度切入：技术原理、商业逻辑、社会影响、伦理边界、历史脉络
 - 能否形成追问链条：表层现象 → 深层原因 → 外延影响
+- 是否能构建"轶事+反思"交替节奏
 
 三、听众关联度
 - 和普通听众生活有真实关联，听完会觉得"原来跟我有关"
@@ -79,7 +80,7 @@ class HostAgent(BaseAgent):
 
 五、去重硬约束（必须满足）
 - 你选择的topic不能与【往期已聊过的话题】语义重复
-- 特别避免再次选择“Claude/GPT发布新模型”这类模型发布泛话题
+
 - 如候选内容与往期高度重合，必须换一个更新颖的角度或换一条资讯
 
 请以JSON格式返回你的选择（不要包含markdown代码块标记）：
@@ -89,7 +90,7 @@ class HostAgent(BaseAgent):
     "reason": "选择理由（2-3句话，说明为什么值得聊、碰撞空间在哪）",
     "conflict_points": ["可能的立场冲突点1", "冲突点2"],
     "search_queries": ["后续深度搜索关键词1", "关键词2", "关键词3", "关键词4", "关键词5"],
-    "angle_hint": "建议讨论切入角度（如：伦理切入 / 历史对比切入）"
+    "angle_hint": "建议讨论切入角度（如：伦理切入 / 历史对比切入 / 生活化类比切入）"
 }}"""
 
         response = await self.think(prompt, temperature=0.7, max_tokens=1024)
@@ -137,19 +138,11 @@ class HostAgent(BaseAgent):
         if not normalized.strip() or not recent_topics:
             return False
 
-        model_release_keywords = ["claude", "gpt", "模型", "发布", "新模型"]
-        looks_like_model_release = (
-            ("claude" in normalized or "gpt" in normalized)
-            and any(k in normalized for k in ["模型", "发布", "新模型", "发布会"])
-        )
-
         for old_topic in recent_topics:
             old_norm = old_topic.lower()
             if normalized == old_norm:
                 return True
             if cls._topic_similarity(topic, old_topic) >= 0.42:
-                return True
-            if looks_like_model_release and any(k in old_norm for k in model_release_keywords):
                 return True
         return False
 
@@ -170,14 +163,14 @@ class HostAgent(BaseAgent):
                 }
 
         # If all today's titles look similar, still return one but force a fresh angle
-        fallback_title = news_list[0].title if news_list else "AI最新动态"
+        fallback_title = news_list[0].title if news_list else "今日热点话题"
         return {
             "index": 1,
             "topic": f"{fallback_title}：这次真正的新变量是什么？",
-            "reason": "今日资讯与历史主题相似，改为聚焦“新增变量”的差异化讨论角度。",
+            "reason": '今日资讯与历史主题相似，改为聚焦"新增变量"的差异化讨论角度。',
             "conflict_points": ["增量是真突破还是叙事包装"],
             "search_queries": [fallback_title, "新增变量", "落地影响"],
-            "angle_hint": "不复述发布信息，专注比较新旧变化与外溢影响",
+            "angle_hint": "不复述已知信息，专注比较新旧变化与外溢影响",
         }
 
     # ------------------------------------------------------------------
@@ -232,20 +225,25 @@ class HostAgent(BaseAgent):
             "point": "讨论要点1：内容说明",
             "depth_hint": "追问挖掘方向（现象->原因->影响）",
             "conflict_setup": "冲突引导（如何让嘉宾产生观点碰撞）",
-            "example_needed": "需要穿插的案例或数据"
+            "example_needed": "需要穿插的具体案例或数据（越具体越好）"
         }}
     ],
+    "unexpected_angle": "全节目最大的反直觉角度：一个听众没想到的视角或结论，在高潮时刻揭示",
     "closing": {{
-        "open_question": "留一个具体开放问题",
-        "host_takeaway": "主持人真实感受"
+        "open_question": "留一个具体开放问题（不是泛问'未来会怎样'，要落到具体细节）",
+        "host_takeaway": "主持人真实感受——可以是还没想通的困惑，比总结更有力"
     }}
 }}
 
 要求：
 - 讨论要点不要写成论文提纲，要像真人聊天前盘话题
-- 每个要点都要可落地、可追问、可反驳
+- 每个要点都要可落地、可追问、可反驳——"这个点赵明远会反对什么？苏婉清怎么讲？"
 - 控制在4-5个讨论要点，适配5分钟播客
-- 整体有推进感：现象 → 原因 → 影响 → 判断"""
+- 整体遵循弗赖塔格金字塔：背景铺垫（交代what）→ 激发事件（why now）→ 发展上升 → 首席洞见高潮（最反直觉的那个点）→ 后果分析
+- 每个要点安排"轶事+反思"交替节奏：先有生动事实/案例（轶事），再有深层意义提炼（反思）
+- 嘉宾的不同专业背景应在不同讨论要点中发挥各自优势：技术、商业、人文各有主场
+- `example_needed` 字段极其重要：给出具体的人名、事件、数字，让嘉宾有血有肉可讲
+- `unexpected_angle` 必须是真正反直觉的——不是"AI会影响就业"这种人人都知道的话"""
 
         response = await self.think(prompt, temperature=0.7, max_tokens=1500)
 
@@ -263,8 +261,8 @@ class HostAgent(BaseAgent):
             logger.error(
                 "Failed to parse episode plan: %s | raw: %s", exc, response)
             return EpisodePlan(
-                topic=topic.get("topic", "AI讨论"),
-                summary="关于最新AI话题的深度讨论",
+                topic=topic.get("topic", "深度讨论"),
+                summary="关于最新话题的深度圆桌讨论",
                 talking_points=[
                     {"point": "现象层：发生了什么", "depth_hint": "关键事实是什么",
                         "conflict_setup": "乐观与谨慎视角", "example_needed": "最近案例"},
@@ -303,31 +301,48 @@ class HostAgent(BaseAgent):
         if isinstance(talking_points_raw, list):
             for item in talking_points_raw:
                 if isinstance(item, dict):
-                    normalized_points.append(
-                        {
-                            "point": str(item.get("point", "")).strip(),
-                            "depth_hint": str(item.get("depth_hint", "")).strip(),
-                            "conflict_setup": str(item.get("conflict_setup", "")).strip(),
-                            "example_needed": str(item.get("example_needed", "")).strip(),
-                        }
-                    )
+                    point_text = str(item.get("point", "")).strip()
+                    if point_text:
+                        normalized_points.append(
+                            {
+                                "point": point_text,
+                                "depth_hint": str(item.get("depth_hint", "")).strip(),
+                                "conflict_setup": str(item.get("conflict_setup", "")).strip(),
+                                "example_needed": str(item.get("example_needed", "")).strip(),
+                            }
+                        )
                 else:
-                    normalized_points.append(str(item).strip())
+                    text_item = str(item).strip()
+                    if text_item:
+                        normalized_points.append(text_item)
 
         if not normalized_points:
-            normalized_points = ["技术解读", "行业影响", "伦理思考"]
+            normalized_points = ["现象解读", "深层原因", "影响与展望"]
+        elif len(normalized_points) > 5:
+            normalized_points = normalized_points[:5]
+
+        if len(normalized_points) < 3:
+            fallback_points = ["现象解读", "深层原因", "影响与展望"]
+            for fb in fallback_points:
+                if len(normalized_points) >= 3:
+                    break
+                normalized_points.append(fb)
 
         key_questions = data.get("key_questions", [])
         if not isinstance(key_questions, list):
             key_questions = [str(key_questions)] if key_questions else []
 
+        unexpected_angle = str(data.get("unexpected_angle", "")).strip()
+        if not unexpected_angle:
+            unexpected_angle = "真正关键的变化往往不在技术本身，而在它如何重排成本、权力与责任"
+
         return {
-            "topic": str(data.get("topic", "AI讨论")).strip() or "AI讨论",
-            "summary": str(data.get("summary", "关于最新AI话题的深度讨论")).strip() or "关于最新AI话题的深度讨论",
+            "topic": str(data.get("topic", "深度讨论")).strip() or "深度讨论",
+            "summary": str(data.get("summary", "关于最新话题的深度圆桌讨论")).strip() or "关于最新话题的深度圆桌讨论",
             "opening": opening,
             "talking_points": normalized_points,
             "key_questions": [str(q).strip() for q in key_questions if str(q).strip()],
-            "unexpected_angle": str(data.get("unexpected_angle", "")).strip(),
+            "unexpected_angle": unexpected_angle,
             "closing": closing,
         }
 
