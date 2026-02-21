@@ -34,8 +34,19 @@
             </div>
             <div>
               <h2>获取今日资讯</h2>
-              <p>从 AI 领域获取最新新闻资讯</p>
+              <p>输入感兴趣的话题，获取最新相关资讯</p>
             </div>
+          </div>
+
+          <div class="topic-input-group">
+            <label class="topic-label">话题方向</label>
+            <input
+              v-model="topicQuery"
+              type="text"
+              class="topic-input"
+              placeholder="例如：量子计算、新能源汽车、教育改革…（留空则获取综合热点）"
+              @keyup.enter="fetchNews"
+            />
           </div>
 
           <button class="btn-fetch" :disabled="fetchingNews" @click="fetchNews">
@@ -302,6 +313,7 @@ const workflowMode = ref('one-click')
 const newsContent = ref(null)
 const selectedTopic = ref('')
 const customTopic = ref('')
+const topicQuery = ref('')
 const fetchingNews = ref(false)
 const generating = ref(false)
 const generatingScript = ref(false)
@@ -340,7 +352,11 @@ function prevStep() {
 async function fetchNews() {
   fetchingNews.value = true
   try {
-    const res = await fetch('/api/debug/news?max_results=10')
+    const params = new URLSearchParams({ max_results: '10' })
+    if (topicQuery.value.trim()) {
+      params.set('topic', topicQuery.value.trim())
+    }
+    const res = await fetch(`/api/debug/news?${params}`)
     const data = await res.json()
     newsContent.value = {
       count: data.count || 0,
@@ -658,6 +674,40 @@ defineExpose({
 .btn-config:hover {
   border-color: var(--color-primary);
   color: var(--color-primary);
+}
+
+/* Topic Input */
+.topic-input-group {
+  margin-bottom: 16px;
+}
+
+.topic-label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  margin-bottom: 8px;
+}
+
+.topic-input {
+  width: 100%;
+  padding: 12px 16px;
+  background: var(--color-bg-elevated, rgba(255,255,255,0.06));
+  border: 1px solid var(--color-border, rgba(255,255,255,0.1));
+  border-radius: var(--radius-md);
+  font-size: 0.95rem;
+  color: var(--color-text-primary);
+  outline: none;
+  transition: border-color var(--transition-fast);
+  box-sizing: border-box;
+}
+
+.topic-input::placeholder {
+  color: var(--color-text-tertiary, rgba(255,255,255,0.35));
+}
+
+.topic-input:focus {
+  border-color: var(--color-primary);
 }
 
 /* Fetch Button */

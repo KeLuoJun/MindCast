@@ -327,7 +327,7 @@
                         v-model="aiDescription"
                         rows="2"
                         class="ai-gen-textarea"
-                        placeholder="例如：一位35岁的女性AI产品经理，冷静理性，喜欢用数据说话，对AI商业化有深刻见解"
+                        placeholder="例如：一位35岁的女性产品经理，冷静理性，喜欢用数据说话，对科技商业化有深刻见解"
                       ></textarea>
                       <button
                         class="btn-ai-gen"

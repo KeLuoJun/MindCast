@@ -72,12 +72,12 @@ async def _translate_to_chinese(text: str, llm_service) -> str:
 
 
 @router.get("/debug/news")
-async def debug_news(max_results: int = 10):
-    """Fetch daily news only (without topic/script/audio generation)."""
+async def debug_news(max_results: int = 10, topic: str = ""):
+    """Fetch news by topic (without topic/script/audio generation)."""
     from backend.services.llm_service import get_llm_service
 
     service = get_news_service()
-    items = await service.get_daily_ai_news(max_results=max_results)
+    items = await service.get_topic_news(topic=topic, max_results=max_results)
 
     # Translate to Chinese if needed
     llm = get_llm_service()
@@ -122,8 +122,8 @@ async def debug_script_preview(req: ScriptPreviewRequest | None = None):
     active_guests = [orchestrator._guest_pool[name] for name in selected_names]
     speaker_voice_map = orchestrator._build_speaker_voice_map(active_guests)
 
-    news_items = await orchestrator._news.get_daily_ai_news(
-        max_results=payload.max_news_results
+    news_items = await orchestrator._news.get_topic_news(
+        topic=payload.topic, max_results=payload.max_news_results
     )
     if not news_items:
         raise HTTPException(status_code=502, detail="No news items retrieved")
@@ -428,7 +428,7 @@ async def generate_guest(req: GuestGenerateRequest):
     male_voices = VOICE_LIBRARY_BY_GENDER[Gender.MALE]
     female_voices = VOICE_LIBRARY_BY_GENDER[Gender.FEMALE]
 
-    prompt = f"""根据以下用户描述，为AI播客节目"AI圆桌派"设计一位嘉宾角色。
+    prompt = f"""根据以下用户描述，为播客节目"圆桌派"设计一位嘉宾角色。
 
 用户描述：{req.description}
 

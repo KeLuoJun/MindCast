@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 class NewsService:
-    """Fetch AI-related news and perform deep searches via Tavily."""
+    """Fetch topic-based news and perform deep searches via Tavily."""
 
     def __init__(self, api_key: str | None = None) -> None:
         self._client = AsyncTavilyClient(
@@ -128,11 +128,19 @@ class NewsService:
         except Exception as exc:
             logger.warning("Persist detailed search to KB failed: %s", exc)
 
-    async def get_daily_ai_news(self, max_results: int = 10) -> list[NewsItem]:
-        """Retrieve today's AI news headlines and summaries."""
-        logger.info("Fetching daily AI news (max %d results)…", max_results)
+    async def get_topic_news(
+        self,
+        topic: str = "",
+        max_results: int = 10,
+    ) -> list[NewsItem]:
+        """Retrieve latest news for a given topic.
+
+        If *topic* is empty, fetches general trending news.
+        """
+        search_query = f"{topic} 最新资讯" if topic.strip() else "今日热点 最新资讯"
+        logger.info("Fetching topic news: %s (max %d results)…", search_query, max_results)
         response = await self._client.search(
-            query="AI 人工智能 最新资讯",
+            query=search_query,
             topic="news",
             time_range="week",
             max_results=max_results,
