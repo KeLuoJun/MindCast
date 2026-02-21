@@ -353,6 +353,11 @@ async function executeDeleteBatch() {
   }
 }
 
+// ── Watch for dialog open to lock scroll ──
+watch(() => confirmDialog.value.show, (val) => {
+  document.body.style.overflow = val ? 'hidden' : ''
+})
+
 // ── Watch for new episode to display ──
 watch(() => store.newEpisodeId, async (id) => {
   if (!id) { newEpisode.value = null; return }
