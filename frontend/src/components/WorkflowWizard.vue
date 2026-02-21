@@ -245,16 +245,63 @@
 
           <!-- Step-by-Step Mode -->
           <div v-else class="step-by-step">
-            <button class="btn-generate-outline" :disabled="!store.canGenerate || store.generatingScript" @click="store.generateScriptPreview">
-              <span v-if="store.generatingScript" class="spinner"></span>
-              {{ store.generatingScript ? '生成中...' : '生成文稿预览' }}
+            <!-- Idle: show generate button -->
+            <button
+              v-if="!store.generatingScript && !store.hasScriptDraft"
+              class="btn-generate-outline"
+              :disabled="!store.canGenerate"
+              @click="store.generateScriptPreview"
+            >
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="8" y1="6" x2="21" y2="6"/>
+                <line x1="8" y1="12" x2="21" y2="12"/>
+                <line x1="8" y1="18" x2="21" y2="18"/>
+              </svg>
+              生成文稿预览
             </button>
 
+            <!-- Generating: visual pipeline + status -->
+            <div v-if="store.generatingScript" class="preview-pipeline">
+              <div class="pipeline-stages">
+                <div
+                  v-for="(stage, idx) in previewStages"
+                  :key="stage.key"
+                  class="pipeline-stage"
+                  :class="getPipelineStageClass(stage.key)"
+                >
+                  <div class="stage-dot">
+                    <svg v-if="getPipelineStageClass(stage.key) === 'completed'" viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="3">
+                      <polyline points="20,6 9,17 4,12"/>
+                    </svg>
+                    <span v-else-if="getPipelineStageClass(stage.key) === 'active'" class="stage-spinner"></span>
+                  </div>
+                  <span class="stage-label">{{ stage.label }}</span>
+                  <div
+                    v-if="idx < previewStages.length - 1"
+                    class="stage-line"
+                    :class="{ filled: getPipelineStageClass(stage.key) === 'completed' }"
+                  ></div>
+                </div>
+              </div>
+              <p class="pipeline-detail">{{ store.previewStageDetail || '正在处理...' }}</p>
+              <button class="btn-cancel-preview" :disabled="!store.previewTaskId" @click="store.cancelScriptPreview">
+                终止生成
+              </button>
+            </div>
+
+            <!-- Script Preview (after generation) -->
             <transition name="fade">
               <div v-if="store.hasScriptDraft" class="script-preview">
                 <div class="preview-header">
                   <h3>{{ store.scriptDraft.title }}</h3>
                   <p>{{ store.scriptDraft.summary }}</p>
+                  <button class="btn-regen" @click="store.generateScriptPreview">
+                    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M23 4v6h-6"/>
+                      <path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/>
+                    </svg>
+                    重新生成
+                  </button>
                 </div>
                 <div class="dialogue-list">
                   <div v-for="(line, idx) in store.scriptDraft.dialogue" :key="idx" class="dialogue-item">
@@ -262,7 +309,12 @@
                       <span class="avatar" :class="getSpeakerClass(line.speaker)">{{ line.speaker.charAt(0) }}</span>
                       <span class="name">{{ line.speaker }}</span>
                     </div>
-                    <textarea v-model="line.text" rows="2" placeholder="编辑对话..."></textarea>
+                    <textarea
+                      v-model="line.text"
+                      class="auto-textarea"
+                      placeholder="编辑对话..."
+                      @input="e => autoResizeTextarea(e.target)"
+                    ></textarea>
                   </div>
                 </div>
                 <button class="btn-confirm-synth" :disabled="store.synthesizing" @click="store.confirmScriptSynthesis">
@@ -292,10 +344,43 @@
 </template>
 
 <script setup>
+import { watch, nextTick } from 'vue'
 import { useWorkflowStore } from '../stores/workflow'
 import GeneratePanel from './GeneratePanel.vue'
 
 const store = useWorkflowStore()
+
+// ── Preview pipeline stages ──
+const previewStages = [
+  { key: 'news',     label: '获取资讯' },
+  { key: 'topic',    label: '选定话题' },
+  { key: 'research', label: '深度研究' },
+  { key: 'planning', label: '节目策划' },
+  { key: 'dialogue', label: '生成文稿' },
+]
+
+function getPipelineStageClass(key) {
+  const keys = previewStages.map(s => s.key)
+  const currentIdx = keys.indexOf(store.previewStage)
+  const itemIdx = keys.indexOf(key)
+  if (currentIdx === -1) return 'pending'
+  if (itemIdx < currentIdx) return 'completed'
+  if (itemIdx === currentIdx) return 'active'
+  return 'pending'
+}
+
+// ── Auto-resize textarea ──
+function autoResizeTextarea(el) {
+  if (!el) return
+  el.style.height = 'auto'
+  el.style.height = el.scrollHeight + 'px'
+}
+
+watch(() => store.scriptDraft, () => {
+  nextTick(() => {
+    document.querySelectorAll('.auto-textarea').forEach(autoResizeTextarea)
+  })
+})
 
 const steps = [
   { key: 'news', label: '获取资讯' },
@@ -1007,30 +1092,190 @@ defineExpose({ nextStep, prevStep })
 }
 
 .preview-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0.5rem;
   margin-bottom: 1.25rem;
   padding-bottom: 1.25rem;
   border-bottom: 2px solid var(--c-border);
 }
 
 .preview-header h3 {
+  flex: 1;
+  min-width: 0;
   font-size: 1.1rem;
   font-weight: 700;
   color: var(--c-text-1);
 }
 
 .preview-header p {
+  width: 100%;
   font-size: 0.88rem;
   color: var(--c-text-2);
   margin-top: 0.3rem;
+  order: 3;
+}
+
+.btn-regen {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 14px;
+  border: 2px solid var(--c-border);
+  background: var(--c-surface);
+  border-radius: var(--r-full);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--c-text-3);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  flex-shrink: 0;
+  transition: all var(--dur-fast) var(--ease);
+}
+
+.btn-regen:hover {
+  border-color: var(--c-primary);
+  color: var(--c-primary);
+  background: var(--c-primary-soft);
+}
+
+/* Preview Pipeline */
+.preview-pipeline {
+  background: var(--c-bg);
+  border: 2px solid var(--c-border);
+  border-radius: var(--r-xl);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.pipeline-stages {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  margin-bottom: 1rem;
+}
+
+.pipeline-stage {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.stage-dot {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid var(--c-border);
+  background: var(--c-surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all var(--dur-normal) var(--ease-bounce);
+}
+
+.pipeline-stage.completed .stage-dot {
+  background: var(--c-success);
+  border-color: var(--c-success);
+  color: white;
+}
+
+.pipeline-stage.active .stage-dot {
+  background: var(--c-primary);
+  border-color: var(--c-primary);
+  box-shadow: 0 2px 10px rgba(255, 107, 53, 0.35);
+}
+
+.pipeline-stage .stage-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--c-text-3);
+  margin-left: 6px;
+  white-space: nowrap;
+}
+
+.pipeline-stage.completed .stage-label {
+  color: var(--c-success);
+}
+
+.pipeline-stage.active .stage-label {
+  color: var(--c-primary);
+  font-weight: 700;
+}
+
+.stage-line {
+  height: 2px;
+  width: 28px;
+  background: var(--c-border);
+  border-radius: 2px;
+  margin: 0 4px;
+  flex-shrink: 0;
+  transition: background var(--dur-normal) var(--ease);
+}
+
+.stage-line.filled {
+  background: var(--c-success);
+}
+
+.stage-spinner {
+  width: 10px;
+  height: 10px;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  display: block;
+}
+
+.pipeline-detail {
+  font-size: 0.82rem;
+  color: var(--c-text-2);
+  text-align: center;
+  animation: fadeInUp 0.4s ease;
+}
+
+.btn-cancel-preview {
+  margin-top: 0.9rem;
+  padding: 7px 14px;
+  border: 2px solid var(--c-border);
+  background: var(--c-surface);
+  color: var(--c-text-2);
+  border-radius: var(--r-full);
+  font-size: 0.78rem;
+  font-weight: 600;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: all var(--dur-fast) var(--ease);
+}
+
+.btn-cancel-preview:hover {
+  border-color: var(--c-primary);
+  color: var(--c-primary);
+  background: var(--c-primary-soft);
+}
+
+.btn-cancel-preview:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 .dialogue-list {
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
-  max-height: 260px;
+  max-height: 55vh;
   overflow-y: auto;
   margin-bottom: 1.25rem;
+  padding-right: 4px;
 }
 
 .dialogue-item {
@@ -1071,22 +1316,27 @@ defineExpose({ nextStep, prevStep })
   font-weight: 600;
 }
 
-.dialogue-item textarea {
+.dialogue-item .auto-textarea {
   flex: 1;
   border: 2px solid var(--c-border);
   border-radius: var(--r-md);
   padding: 0.65rem;
   font-size: 0.85rem;
   font-family: var(--font-sans);
+  line-height: 1.65;
   resize: none;
   background: var(--c-bg);
   color: var(--c-text-1);
+  overflow: hidden;
+  min-height: 2.8rem;
+  /* CSS auto-resize for modern browsers */
+  field-sizing: content;
 }
 
-.dialogue-item textarea:focus {
+.dialogue-item .auto-textarea:focus {
   outline: none;
   border-color: var(--c-primary);
-  background: var(--c-surface);
+  background: var(--c-surface);;
 }
 
 .btn-confirm-synth {

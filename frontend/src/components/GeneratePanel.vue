@@ -126,6 +126,14 @@
           </svg>
         </div>
         <p class="status-text">{{ detail || '等待执行...' }}</p>
+        <button
+          v-if="!isCompleted && !error"
+          class="btn-cancel"
+          :disabled="cancelling"
+          @click="cancelTask"
+        >
+          {{ cancelling ? '终止中...' : '终止生成' }}
+        </button>
         <p v-if="error" class="error-text">{{ error }}</p>
       </div>
 
@@ -168,12 +176,14 @@ const stages = [
 const currentStage = ref('')
 const detail = ref('')
 const error = ref('')
+const cancelling = ref(false)
 const currentSpeaker = ref('')
 const isCompleted = ref(false)
 let eventSource = null
 let speakerInterval = null
 
 const currentStageLabel = computed(() => {
+  if (currentStage.value === 'cancelled') return '已终止'
   const stage = stages.find(s => s.key === currentStage.value)
   return stage ? stage.label : ''
 })
@@ -204,6 +214,29 @@ function simulateSpeaking() {
   }, 2500)
 }
 
+async function cancelTask() {
+  if (!props.taskId || cancelling.value) return
+  cancelling.value = true
+  try {
+    await fetch(`/api/tasks/${props.taskId}/cancel`, { method: 'POST' })
+    detail.value = '任务已终止'
+    currentStage.value = 'cancelled'
+    if (eventSource) {
+      eventSource.close()
+      eventSource = null
+    }
+    if (speakerInterval) {
+      clearInterval(speakerInterval)
+      speakerInterval = null
+    }
+    setTimeout(() => emit('completed', null), 600)
+  } catch (e) {
+    error.value = '终止失败，请重试'
+  } finally {
+    cancelling.value = false
+  }
+}
+
 onMounted(() => {
   eventSource = new EventSource(`/api/status/${props.taskId}`)
   eventSource.onmessage = (event) => {
@@ -214,15 +247,32 @@ onMounted(() => {
       if (data.status === 'completed') {
         isCompleted.value = true
         eventSource.close()
+        eventSource = null
         clearInterval(speakerInterval)
+        speakerInterval = null
         const episodeId = data.episode_id || null
         setTimeout(() => emit('completed', episodeId), 2500)
       }
       if (data.status === 'failed') {
         error.value = data.detail
         eventSource.close()
+        eventSource = null
         clearInterval(speakerInterval)
+        speakerInterval = null
         setTimeout(() => emit('completed', null), 3000)
+      }
+      if (data.status === 'cancelled') {
+        detail.value = data.detail || '任务已终止'
+        currentStage.value = 'cancelled'
+        if (eventSource) {
+          eventSource.close()
+          eventSource = null
+        }
+        if (speakerInterval) {
+          clearInterval(speakerInterval)
+          speakerInterval = null
+        }
+        setTimeout(() => emit('completed', null), 600)
       }
     } catch (e) {
       console.error('SSE parse error:', e)
@@ -230,7 +280,10 @@ onMounted(() => {
   }
   eventSource.onerror = () => {
     error.value = '连接中断'
-    eventSource.close()
+    if (eventSource) {
+      eventSource.close()
+      eventSource = null
+    }
   }
   simulateSpeaking()
 })
@@ -612,6 +665,8 @@ onUnmounted(() => {
 .status-box {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
   gap: 10px;
   padding: 0.875rem 1rem;
   background: var(--c-bg);
@@ -635,6 +690,30 @@ onUnmounted(() => {
   color: var(--c-text-2);
   font-size: 0.85rem;
   flex: 1;
+}
+
+.btn-cancel {
+  padding: 6px 12px;
+  border: 2px solid var(--c-border);
+  border-radius: var(--r-full);
+  background: var(--c-surface);
+  color: var(--c-text-2);
+  font-size: 0.78rem;
+  font-weight: 600;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: all var(--dur-fast) var(--ease);
+}
+
+.btn-cancel:hover:not(:disabled) {
+  border-color: var(--c-primary);
+  color: var(--c-primary);
+  background: var(--c-primary-soft);
+}
+
+.btn-cancel:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .error-text {

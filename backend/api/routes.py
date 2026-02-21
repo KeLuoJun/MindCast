@@ -43,6 +43,7 @@ router = APIRouter(prefix="/api")
 
 # In-memory task tracking (MVP — no persistent task store)
 _tasks: dict[str, dict] = {}
+_task_jobs: dict[str, asyncio.Task] = {}
 
 
 # ---------------------------------------------------------------------------
@@ -251,6 +252,180 @@ async def script_preview(req: ScriptPreviewRequest | None = None):
     return await debug_script_preview(req)
 
 
+@router.post("/script/preview/task", response_model=TaskCreatedResponse)
+async def script_preview_task(req: ScriptPreviewRequest | None = None):
+    """Start script preview generation as a background task with SSE progress."""
+    payload = req or ScriptPreviewRequest()
+
+    task_id = f"task_{len(_tasks) + 1}"
+    _tasks[task_id] = {
+        "status": "started",
+        "stage": "news",
+        "detail": "正在获取资讯...",
+        "episode_id": None,
+        "result": None,
+    }
+
+    async def _run():
+        guest_pool_service = get_guest_pool_service()
+        guest_pool = guest_pool_service.list_guests()
+        orchestrator = PodcastOrchestrator(guest_personas=guest_pool)
+
+        selected_names = [n.strip()
+                          for n in payload.selected_guests if n and n.strip()]
+        if selected_names:
+            unknown = [
+                n for n in selected_names if n not in orchestrator._guest_pool]
+            if unknown:
+                _tasks[task_id].update({
+                    "status": "failed", "stage": "error",
+                    "detail": f"Unknown guests: {', '.join(unknown)}"
+                })
+                return
+            if len(selected_names) > settings.max_guests:
+                _tasks[task_id].update({
+                    "status": "failed", "stage": "error",
+                    "detail": f"最多可选择{settings.max_guests}位嘉宾"
+                })
+                return
+        else:
+            num_guests = random.randint(1, 2)
+            selected_names = random.sample(
+                list(orchestrator._guest_pool.keys()), num_guests)
+
+        active_guests = [orchestrator._guest_pool[name]
+                         for name in selected_names]
+        speaker_voice_map = orchestrator._build_speaker_voice_map(
+            active_guests)
+
+        try:
+            _tasks[task_id].update({"stage": "news", "detail": "正在获取资讯..."})
+            news_items = await orchestrator._news.get_topic_news(
+                topic=payload.topic, max_results=payload.max_news_results
+            )
+            if not news_items:
+                raise RuntimeError("未获取到相关资讯")
+
+            _tasks[task_id].update({"stage": "topic", "detail": "正在分析选定话题..."})
+            if payload.topic.strip():
+                selected_topic = payload.topic.strip()
+                topic = {
+                    "topic": selected_topic,
+                    "reason": "用户手动选择话题",
+                    "search_queries": [
+                        selected_topic,
+                        f"{selected_topic} 最新进展",
+                        f"{selected_topic} 行业争议",
+                    ],
+                }
+            else:
+                recent_topics = orchestrator._load_recent_topics(limit=20)
+                topic = await orchestrator.host.select_topic(news_items, recent_topics=recent_topics)
+            search_queries = topic.get("search_queries", [])[
+                :payload.max_search_queries]
+
+            _tasks[task_id].update({
+                "stage": "research",
+                "detail": f"深度研究中：{topic.get('topic', '')}...",
+            })
+            detailed_info: list[DetailedInfo] = []
+            kb = get_knowledge_base()
+            for query in search_queries:
+                rag_docs = await kb.query(
+                    query, top_k=4, collection=BACKGROUND_MATERIAL, scope=KNOWLEDGE_SCOPE_GLOBAL
+                )
+                rag_snippets = [d.get("content", "")
+                                for d in rag_docs if d.get("content")]
+                decision = await orchestrator.host.decide_need_fresh_search(query, rag_snippets)
+                need_fresh_search = bool(
+                    decision.get("need_fresh_search", False))
+                if not rag_snippets:
+                    need_fresh_search = True
+                if need_fresh_search:
+                    focus_query = decision.get("focus", "").strip() or query
+                    detailed_info.append(await orchestrator._news.search_detail(focus_query))
+                else:
+                    rag_answer = "\n\n".join(
+                        f"- {txt[:300]}" for txt in rag_snippets[:4])
+                    detailed_info.append(DetailedInfo(
+                        query=query,
+                        answer=f"基于知识库历史资料整理：\n{rag_answer}" if rag_answer else "",
+                        results=[],
+                    ))
+
+            _tasks[task_id].update(
+                {"stage": "planning", "detail": "正在策划节目结构..."})
+            plan = await orchestrator.host.plan_episode(
+                topic, [info.model_dump()
+                        for info in detailed_info], selected_names
+            )
+
+            episode = Episode(topic=plan.topic, title=plan.topic,
+                              summary=plan.summary, guests=selected_names)
+            rag_context = ""
+            try:
+                rag_context = await kb.build_rag_context(plan.topic, top_k_per_collection=3)
+            except Exception:
+                logger.warning(
+                    "RAG retrieval failed in preview task, continuing without")
+
+            output_dir = settings.ensure_output_dir()
+            run_logger = EpisodeRunLogger(
+                output_dir / "logs" / f"{episode.id}.debug.jsonl")
+
+            _tasks[task_id].update(
+                {"stage": "dialogue", "detail": "正在生成对话内容..."})
+            dialogue = await orchestrator._generate_dialogue(
+                plan,
+                detailed_info,
+                {
+                    "episode": episode,
+                    "progress": None,
+                    "run_logger": run_logger,
+                    "rag_context": rag_context,
+                    "active_guests": active_guests,
+                    "speaker_voice_map": speaker_voice_map,
+                },
+            )
+
+            orchestrator.host.reset_history()
+            for guest in active_guests:
+                guest.reset_history()
+
+            _tasks[task_id].update({
+                "status": "completed",
+                "stage": "done",
+                "detail": "文稿生成完成",
+                "result": {
+                    "title": plan.topic,
+                    "topic": plan.topic,
+                    "summary": plan.summary,
+                    "guests": selected_names,
+                    "dialogue": [
+                        {"speaker": line.speaker, "text": line.text,
+                            "emotion": line.emotion}
+                        for line in dialogue
+                    ],
+                },
+            })
+        except asyncio.CancelledError:
+            _tasks[task_id].update({
+                "status": "cancelled",
+                "stage": "cancelled",
+                "detail": "任务已终止",
+            })
+            raise
+        except Exception as exc:
+            logger.exception("Script preview task failed")
+            _tasks[task_id].update(
+                {"status": "failed", "stage": "error", "detail": str(exc)})
+        finally:
+            _task_jobs.pop(task_id, None)
+
+    _task_jobs[task_id] = asyncio.create_task(_run())
+    return TaskCreatedResponse(task_id=task_id, message="文稿预览任务已创建")
+
+
 @router.post("/script/synthesize", response_model=TaskCreatedResponse)
 async def synthesize_from_script(req: ScriptSynthesisRequest):
     """Synthesize audio from frontend-edited script in background."""
@@ -304,6 +479,13 @@ async def synthesize_from_script(req: ScriptSynthesisRequest):
                 "detail": f"完成！ID: {episode.id}",
                 "episode_id": episode.id,
             })
+        except asyncio.CancelledError:
+            _tasks[task_id].update({
+                "status": "cancelled",
+                "stage": "cancelled",
+                "detail": "任务已终止",
+            })
+            raise
         except Exception as exc:
             logger.exception("Script synthesis failed")
             _tasks[task_id].update({
@@ -311,8 +493,10 @@ async def synthesize_from_script(req: ScriptSynthesisRequest):
                 "stage": "error",
                 "detail": str(exc),
             })
+        finally:
+            _task_jobs.pop(task_id, None)
 
-    asyncio.create_task(_run())
+    _task_jobs[task_id] = asyncio.create_task(_run())
     return TaskCreatedResponse(task_id=task_id, message="语音合成任务已创建")
 
 
@@ -359,6 +543,13 @@ async def generate_episode(req: GenerateRequest | None = None):
                 "detail": f"完成！ID: {episode.id}",
                 "episode_id": episode.id,
             })
+        except asyncio.CancelledError:
+            _tasks[task_id].update({
+                "status": "cancelled",
+                "stage": "cancelled",
+                "detail": "任务已终止",
+            })
+            raise
         except Exception as exc:
             logger.exception("Episode generation failed")
             _tasks[task_id].update({
@@ -366,8 +557,10 @@ async def generate_episode(req: GenerateRequest | None = None):
                 "stage": "error",
                 "detail": str(exc),
             })
+        finally:
+            _task_jobs.pop(task_id, None)
 
-    asyncio.create_task(_run())
+    _task_jobs[task_id] = asyncio.create_task(_run())
     return TaskCreatedResponse(task_id=task_id)
 
 
@@ -590,7 +783,7 @@ async def task_status(task_id: str):
             if current != last_sent:
                 yield f"data: {current}\n\n"
                 last_sent = current
-            if task.get("status") in ("completed", "failed"):
+            if task.get("status") in ("completed", "failed", "cancelled"):
                 break
             await asyncio.sleep(0.5)
 
@@ -599,6 +792,29 @@ async def task_status(task_id: str):
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@router.post("/tasks/{task_id}/cancel")
+async def cancel_task(task_id: str):
+    """Cancel a running background task."""
+    task = _tasks.get(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    status = task.get("status")
+    if status in ("completed", "failed", "cancelled"):
+        return {"status": status, "message": "任务已结束"}
+
+    job = _task_jobs.get(task_id)
+    if job and not job.done():
+        job.cancel()
+
+    task.update({
+        "status": "cancelled",
+        "stage": "cancelled",
+        "detail": "任务已终止",
+    })
+    return {"status": "cancelled", "message": "任务已终止"}
 
 
 # ---------------------------------------------------------------------------

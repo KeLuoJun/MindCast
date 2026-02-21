@@ -30,6 +30,12 @@ export const useWorkflowStore = defineStore('workflow', () => {
   const taskId = ref(null)
   const scriptDraft = ref(null)
 
+  // ── Preview task (step-by-step mode SSE) ──
+  const previewStage = ref('')
+  const previewStageDetail = ref('')
+  const previewTaskId = ref(null)
+  let _previewEventSource = null
+
   // ── Newly generated episode (for auto-display) ──
   const newEpisodeId = ref(null)
   const showNewEpisode = ref(false)
@@ -163,8 +169,19 @@ export const useWorkflowStore = defineStore('workflow', () => {
   async function generateScriptPreview() {
     if (!canGenerate.value) return
     generatingScript.value = true
+    previewStage.value = 'news'
+    previewStageDetail.value = '正在获取资讯...'
+    previewTaskId.value = null
+    scriptDraft.value = null
+
+    // Tear down any existing SSE connection
+    if (_previewEventSource) {
+      _previewEventSource.close()
+      _previewEventSource = null
+    }
+
     try {
-      const res = await fetch('/api/script/preview', {
+      const res = await fetch('/api/script/preview/task', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -173,21 +190,78 @@ export const useWorkflowStore = defineStore('workflow', () => {
         })
       })
       const data = await res.json()
-      scriptDraft.value = {
-        title: data.title || data.topic || '',
-        topic: data.topic || '',
-        summary: data.summary || '',
-        guests: data.guests || [],
-        dialogue: (data.dialogue || []).map(line => ({
-          speaker: line.speaker,
-          text: line.text,
-          emotion: line.emotion || 'neutral'
-        }))
+      const taskId = data.task_id
+      previewTaskId.value = taskId
+
+      // Subscribe to SSE progress
+      _previewEventSource = new EventSource(`/api/status/${taskId}`)
+      _previewEventSource.onmessage = (event) => {
+        try {
+          const evt = JSON.parse(event.data)
+          previewStage.value = evt.stage || ''
+          previewStageDetail.value = evt.detail || ''
+          if (evt.status === 'completed' && evt.result) {
+            scriptDraft.value = {
+              title: evt.result.title || '',
+              topic: evt.result.topic || '',
+              summary: evt.result.summary || '',
+              guests: evt.result.guests || [],
+              dialogue: (evt.result.dialogue || []).map(line => ({
+                speaker: line.speaker,
+                text: line.text,
+                emotion: line.emotion || 'neutral'
+              }))
+            }
+            generatingScript.value = false
+            previewTaskId.value = null
+            _previewEventSource.close()
+            _previewEventSource = null
+          }
+          if (evt.status === 'failed' || evt.status === 'cancelled') {
+            generatingScript.value = false
+            if (evt.status === 'cancelled') {
+              previewStage.value = 'cancelled'
+              previewStageDetail.value = evt.detail || '任务已终止'
+            }
+            previewTaskId.value = null
+            _previewEventSource.close()
+            _previewEventSource = null
+          }
+        } catch (e) {
+          console.error('SSE parse error:', e)
+        }
+      }
+      _previewEventSource.onerror = () => {
+        generatingScript.value = false
+        previewTaskId.value = null
+        if (_previewEventSource) {
+          _previewEventSource.close()
+          _previewEventSource = null
+        }
       }
     } catch (e) {
-      console.error('Failed to generate script preview:', e)
+      console.error('Failed to start script preview task:', e)
+      generatingScript.value = false
+      previewTaskId.value = null
+    }
+  }
+
+  async function cancelScriptPreview() {
+    if (!previewTaskId.value) return
+    const currentTaskId = previewTaskId.value
+    try {
+      await fetch(`/api/tasks/${currentTaskId}/cancel`, { method: 'POST' })
+    } catch (e) {
+      console.error('Failed to cancel script preview:', e)
     } finally {
       generatingScript.value = false
+      previewStage.value = 'cancelled'
+      previewStageDetail.value = '任务已终止'
+      previewTaskId.value = null
+      if (_previewEventSource) {
+        _previewEventSource.close()
+        _previewEventSource = null
+      }
     }
   }
 
@@ -246,6 +320,13 @@ export const useWorkflowStore = defineStore('workflow', () => {
     synthesizing.value = false
     showNewEpisode.value = false
     newEpisodeId.value = null
+    previewStage.value = ''
+    previewStageDetail.value = ''
+    previewTaskId.value = null
+    if (_previewEventSource) {
+      _previewEventSource.close()
+      _previewEventSource = null
+    }
   }
 
   return {
@@ -275,6 +356,11 @@ export const useWorkflowStore = defineStore('workflow', () => {
     hasScriptDraft,
     canGenerate,
 
+    // Preview SSE state
+    previewStage,
+    previewStageDetail,
+    previewTaskId,
+
     // Actions
     fetchNews,
     loadGuests,
@@ -284,6 +370,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     toggleGuest,
     startGenerate,
     generateScriptPreview,
+    cancelScriptPreview,
     confirmScriptSynthesis,
     onGenerateCompleted,
     dismissNewEpisode,
