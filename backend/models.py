@@ -117,6 +117,31 @@ class EpisodePlan(BaseModel):
             return str(point.get("conflict_setup") or "")
         return ""
 
+    def talking_point_example_needed(self, index: int) -> str:
+        if index < 0 or index >= len(self.talking_points):
+            return ""
+        point = self.talking_points[index]
+        if isinstance(point, dict):
+            return str(point.get("example_needed") or "")
+        return ""
+
+    def arc_position(self, index: int) -> str:
+        """Return dramatic arc label for a talking point index.
+
+        Maps the index to a Freytag's-Pyramid position:
+        0 → exposition, 1 → rising_action, n-2 → climax, n-1 → falling_action/resolution
+        """
+        n = len(self.talking_points)
+        if n == 0:
+            return "exposition"
+        if index == 0:
+            return "exposition"
+        if n >= 3 and index == n - 2:
+            return "climax"
+        if index == n - 1:
+            return "falling_action"
+        return "rising_action"
+
     def talking_point_texts(self) -> list[str]:
         return [self.talking_point_text(i) for i in range(len(self.talking_points)) if self.talking_point_text(i)]
 

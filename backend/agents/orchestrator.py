@@ -202,8 +202,9 @@ class PodcastOrchestrator:
 
     async def _node_fetch_news(self, state: OrchestratorState) -> OrchestratorState:
         episode = state["episode"]
-        await self._emit_progress(state, "news", "正在获取AI资讯…")
-        news_items = await self._news.get_daily_ai_news(max_results=10)
+        user_topic = (episode.topic or "").strip()
+        await self._emit_progress(state, "news", f"正在获取{'\u300c' + user_topic + '\u300d相关' if user_topic else ''}资讯…")
+        news_items = await self._news.get_topic_news(topic=user_topic, max_results=10)
         if not news_items:
             raise RuntimeError("No news items retrieved from Tavily")
 
@@ -535,7 +536,7 @@ class PodcastOrchestrator:
 
         # --- Opening ---
         # Add the fixed show opening
-        fixed_opening_text = "各位好，欢迎来到——『AI圆桌派』。在这里，我们撇开那些干巴巴的代码，只聊聊这股席卷全球的AI浪潮里，最真诚的人性与分歧。"
+        fixed_opening_text = "各位好，欢迎来到——『圆桌派』。在这里，我们抛开表面的新闻标题，聊一聊这些热点背后真正值得思考的问题。"
         _append_line(
             DialogueLine(
                 speaker=self.host.name,
@@ -547,11 +548,12 @@ class PodcastOrchestrator:
         )
 
         opening_hint = plan.opening_text()
+        trimmed_open = self._trim_shared_context(shared_context)
         opening_line = await self.host.generate_line(
-            shared_context,
+            trimmed_open,
             f"现在是节目开场。请紧接刚才的开场白，用一种轻松自然的方式带出今天的话题「{plan.topic}」，"
             f"顺便介绍{len(guest_names)}位嘉宾：{'、'.join(guest_names)}。"
-            f"开场要求：紧接『AI圆桌派』的基调；别搞『欢迎收听』模板；可用反直觉事实、尖锐问题或生活化场景做钩子；"
+            f"开场要求：紧接『圆桌派』的基调；别搞『欢迎收听』模板；可用反直觉事实、尖锐问题或生活化场景做钩子；"
             f"可轻微表达你的立场或困惑。{opening_hint}",
         )
         _append_line(opening_line)
@@ -564,21 +566,60 @@ class PodcastOrchestrator:
             talking_point = plan.talking_point_text(tp_idx)
             depth_hint = plan.talking_point_depth_hint(tp_idx)
             conflict_setup = plan.talking_point_conflict_setup(tp_idx)
+            example_needed = plan.talking_point_example_needed(tp_idx)
+            arc_pos = plan.arc_position(tp_idx)
+            total_points = len(plan.talking_points)
+
             await self._emit_progress(
                 state,
                 "dialogue",
-                f"讨论要点 {tp_idx + 1}/{len(plan.talking_points)}: {talking_point[:30]}…",
+                f"讨论要点 {tp_idx + 1}/{total_points}: {talking_point[:30]}…",
                 payload={"talking_point": talking_point, "index": tp_idx + 1},
             )
 
-            # Host introduces the talking point
+            # Host introduces the talking point — technique varies by arc position
+            # Techniques based on podcast research:
+            #   exposition   → anecdote hook / life-scenario opener
+            #   rising_action → contrast probe ("before vs now") / challenge assumption
+            #   climax        → emotional recall / hypothetical scenario / reveal unexpected_angle
+            #   falling_action → synthesize conflict, pivot toward resolution
+            if arc_pos == "exposition":
+                intro_technique = (
+                    f"引入讨论要点：「{talking_point}」。"
+                    f"开场用一个生活化场景或反直觉事实做钩子，让听众立刻感到「这和我有关」。"
+                    f"然后向{guest_names[0]}抛出第一个问题，要具体，不要泛问「你怎么看」。"
+                    f"背景补充方向：{depth_hint or '把这件事的来龙去脉交代清楚'}。"
+                )
+            elif arc_pos == "rising_action":
+                intro_technique = (
+                    f"深化讨论：「{talking_point}」。"
+                    f"用对比性追问打开空间——可以是「一年前你们行业怎么看这问题？现在变了吗？」"
+                    f"或者挑战上一轮的某个假设：「等等，那个前提站得住脚吗？」"
+                    f"可能的冲突点：{conflict_setup or '不同利益方对这件事的权重判断完全不同'}。"
+                    f"需要的案例或数据：{example_needed or '具体到人、到事的佐证'}。"
+                )
+            elif arc_pos == "climax":
+                unexpected = plan.unexpected_angle or "这件事背后有一个大家没注意到的变量"
+                intro_technique = (
+                    f"全片高潮时刻——讨论要点：「{talking_point}」。"
+                    f"现在抛出今天节目最有冲击力的角度：{unexpected}。"
+                    f"可用情感召回法：「带我回到你第一次意识到这个问题的时候，当时发生了什么？」"
+                    f"或设定极端假设场景让嘉宾决策，探测价值观真实边界。"
+                    f"这里要有张力，不要急着和稀泥——让不同观点的碰撞多发酵一会儿。"
+                    f"冲突设计：{conflict_setup or '此处应有明确的立场分叉'}。"
+                )
+            else:  # falling_action / resolution
+                intro_technique = (
+                    f"进入收尾阶段：「{talking_point}」。"
+                    f"先快速总结刚才分歧的核心：「你们真正的分歧其实是在……」"
+                    f"然后追问影响与后果：这些争议对普通人意味着什么？短期vs长期如何？"
+                    f"追问方向：{depth_hint or '把讨论落回到听众的真实生活'}。"
+                )
+
+            trimmed_ctx = self._trim_shared_context(shared_context)
             host_intro = await self.host.generate_line(
-                shared_context,
-                f"引入讨论要点：「{talking_point}」。"
-                f"可以向某位嘉宾抛出具体问题，或用意外事实/数据开场，或给一个假设场景让对方判断。"
-                f"追问方向提示：{depth_hint or '围绕因果链条继续追问'}。"
-                f"可能冲突点：{conflict_setup or '不同立场对风险与机会的权重不同'}。"
-                f"不要说'接下来我们来讨论'这种过渡套话。",
+                trimmed_ctx,
+                intro_technique + f"\n不要说'接下来我们来讨论'这种过渡套话。",
             )
             _append_line(host_intro)
 
@@ -606,8 +647,9 @@ class PodcastOrchestrator:
                     interrupter = guest_map[interrupter_name]
 
                     # First speaker starts (will be cut short)
+                    trimmed_intr = self._trim_shared_context(shared_context)
                     start_line = await guest.generate_line(
-                        shared_context,
+                        trimmed_intr,
                         f"你刚要回应关于「{talking_point}」的讨论，但你的发言会被{interrupter_name}打断。"
                         f"所以只说前半句话就被截断了——大概20-40字就被打断，句子可以不完整，"
                         f"用「——」或「…」结尾表示被打断。"
@@ -616,8 +658,9 @@ class PodcastOrchestrator:
                     _append_line(start_line)
 
                     # Interrupter cuts in
+                    trimmed_intr2 = self._trim_shared_context(shared_context)
                     interrupt_line = await interrupter.generate_line(
-                        shared_context,
+                        trimmed_intr2,
                         f"你忍不住打断了{guest_name}的发言！可能因为你太想反驳、太兴奋，"
                         f"或突然想到关键点。请用自然口语切入（如『不好意思打断一下』），"
                         f"然后在40-80字内快速给出核心观点。"
@@ -626,8 +669,9 @@ class PodcastOrchestrator:
                     _append_line(interrupt_line)
 
                     # Original speaker responds / continues
+                    trimmed_intr3 = self._trim_shared_context(shared_context)
                     resume_line = await guest.generate_line(
-                        shared_context,
+                        trimmed_intr3,
                         f"你被{interrupter_name}打断了。现在你可以接着说或者回应ta的观点。"
                         f"可以表现出被打断的反应——笑着说'行行行让你先说完'、"
                         f"'你这么一说我倒想起来了'、或者直接接上'对对对但是我要说的是'。",
@@ -648,43 +692,72 @@ class PodcastOrchestrator:
                     continue
 
                 # Normal guest turn
-                # Build a more contextual instruction based on position
+                # Build a more contextual instruction based on position and arc
+                arc_guidance = {
+                    "exposition": "先把你在这方面的第一手观察讲清楚，用一个具体案例打底。",
+                    "rising_action": "在前一位嘉宾的基础上加新信息量，不要重复，要有增量或转折。",
+                    "climax": "这是全片最重要的时刻，把你最核心的判断说出来，不要留水分。敢于暴露真实困惑或反直觉立场。",
+                    "falling_action": "回到你最在意的那个核心论点，给出一个可操作的具体判断。",
+                }.get(arc_pos, "")
+
+                example_prompt = f"背景资料里提到需要这类案例或数据：{example_needed}。" if example_needed else ""
+                depth_prompt = f"深挖方向：{depth_hint}。" if depth_hint else ""
+
                 if sp_idx == 0:
                     instruction = (
                         f"回应主持人关于「{talking_point}」的讨论。"
-                        f"从你{guest.persona.occupation}的真实经验出发分享看法——"
-                        f"最好能举一个你亲历或者具体了解的案例。"
+                        f"从你{guest.persona.occupation}的真实经验出发——"
+                        f"最好能举一个你亲历或具体了解的案例，而不是泛泛而谈。"
                         f"你的立场倾向是：{guest.persona.stance_bias or '保持审慎但有判断'}。"
+                        f"{depth_prompt}{example_prompt}{arc_guidance}"
                     )
                 else:
                     prev_speaker = speakers_this_round[sp_idx - 1]
                     prev_guest = guest_map[prev_speaker]
                     stance_diff_hint = (
-                        "立场差异明显，建议正面交锋"
+                        "立场差异明显，建议正面交锋，不要绕圈子"
                         if (guest.persona.stance_bias or "") != (prev_guest.persona.stance_bias or "")
-                        else "立场可能接近，建议提供新证据或新角度"
+                        else "立场可能接近——找到你们的分歧点，或者引入新的对立维度"
                     )
                     instruction = (
                         f"你听了{prev_speaker}关于「{talking_point}」的观点。"
-                        f"你可以接着ta的话往深了聊，也可以提出不同角度甚至反驳。"
-                        f"从你{guest.persona.occupation}的视角出发，给出有新增信息量的回应。"
-                        f"你的立场倾向是：{guest.persona.stance_bias or '保持审慎但有判断'}。"
-                        f"与前一位嘉宾的立场差异：{stance_diff_hint}。"
+                        f"你可以接着ta的话往深了聊，也可以反驳。"
+                        f"重点是：给出有新增信息量的回应，不要重复别人的意思。"
+                        f"从你{guest.persona.occupation}视角出发。"
+                        f"你的立场：{guest.persona.stance_bias or '保持审慎但有判断'}。"
+                        f"与{prev_speaker}的立场差异：{stance_diff_hint}。"
+                        f"{depth_prompt}{example_prompt}{arc_guidance}"
                     )
 
-                guest_line = await guest.generate_line(shared_context, instruction)
+                trimmed_ctx_guest = self._trim_shared_context(shared_context)
+                guest_line = await guest.generate_line(trimmed_ctx_guest, instruction)
                 _append_line(guest_line)
 
             # Host follow-up / transition
             if tp_idx < len(plan.talking_points) - 1:
                 next_talking_point = plan.talking_point_text(tp_idx + 1)
-                followup = await self.host.generate_line(
-                    shared_context,
-                    f"对嘉宾刚才的观点做一个简短、有态度的回应。"
-                    f"可以同意并补充、也可以质疑并追问，或点出核心分歧。"
-                    f"然后自然过渡到下一个讨论方向「{next_talking_point}」，"
-                    f"不要用'接下来'、'让我们转向'这类套话。",
-                )
+                next_arc = plan.arc_position(tp_idx + 1)
+                # Vary follow-up style by upcoming arc position
+                if next_arc == "climax":
+                    followup_style = (
+                        f"先快速点出刚才讨论的核心分歧：「你们真正不同的地方是……」。"
+                        f"然后用一个尖锐问题引出「{next_talking_point}」——这是今天最关键的问题，"
+                        f"预告一下它的颠覆性，让听众想继续听。"
+                    )
+                elif next_arc == "falling_action":
+                    followup_style = (
+                        f"对刚才的讨论做一个「不总结的提炼」——点出最重要的一个洞见，"
+                        f"然后自然引向「{next_talking_point}」，把讨论的余温带进去。"
+                    )
+                else:
+                    followup_style = (
+                        f"对嘉宾刚才的观点做一个简短、有态度的回应。"
+                        f"可以同意并补充、也可以质疑并追问，或点出核心分歧。"
+                        f"然后自然过渡到下一个讨论方向「{next_talking_point}」，"
+                        f"不要用'接下来'、'让我们转向'这类套话。"
+                    )
+                trimmed_followup = self._trim_shared_context(shared_context)
+                followup = await self.host.generate_line(trimmed_followup, followup_style)
                 _append_line(followup)
 
             current_words = sum(len(line.text) for line in dialogue)
@@ -699,13 +772,39 @@ class PodcastOrchestrator:
                 )
                 break
 
+        # --- Pre-closing: each guest gives a brief final take ---
+        # This mirrors the "Change Point" technique from Sawatsky: ask each person
+        # for their single most important changed perspective from this conversation.
+        if guest_names:
+            trimmed_pretake = self._trim_shared_context(shared_context)
+            host_pretake = await self.host.generate_line(
+                trimmed_pretake,
+                f"节目即将结束，请每位嘉宾说一句话——不是总结，而是：今天这个讨论里，"
+                f"有没有一个让你改变了想法的时刻，或者一个你带走的具体问题？"
+                f"语气要自然，像是朋友聊完想问的那句话。先向{guest_names[0]}抛出。",
+            )
+            _append_line(host_pretake)
+
+            for final_guest_name in guest_names:
+                final_guest = guest_map[final_guest_name]
+                trimmed_final = self._trim_shared_context(shared_context)
+                final_line = await final_guest.generate_line(
+                    trimmed_final,
+                    f"节目将要结束了。用一到两句话说一个「变革点」——今天的讨论里"
+                    f"有没有让你改变看法的时刻？或者你带走的一个还没想清楚的问题？"
+                    f"要真实、具体，不要做总结发言，不要说'感谢主持人'之类的套话。"
+                    f"体现你{final_guest.persona.occupation}的独特视角。",
+                )
+                _append_line(final_line)
+
         # --- Closing ---
         closing_hint = plan.closing_text()
+        trimmed_close = self._trim_shared_context(shared_context)
         closing_line = await self.host.generate_line(
-            shared_context,
+            trimmed_close,
             f"节目收尾。不要做长篇总结，也不要说'让我们拭目以待'之类的套话。"
             f"分享一个你在这次讨论后的真实感受、困惑或态度变化，"
-            f"简短感谢嘉宾，留一个具体开放问题给听众。{closing_hint}",
+            f"简短感谢嘉宾，留一个具体开放问题给听众思考。{closing_hint}",
         )
         _append_line(closing_line)
 
@@ -884,28 +983,91 @@ class PodcastOrchestrator:
         detailed_info: list[DetailedInfo],
         rag_context: str = "",
     ) -> str:
-        """Compile background research + RAG context into a block for agents."""
+        """Compile background research + RAG into an E-type structured brief for agents.
+
+        E-type structure: Current State → How We Got Here → Where This Leads.
+        This mirrors best-practice used by editors like 'The Daily' to anchor narrative
+        in the present, provide historical depth, then open future possibility.
+        """
         lines = [
+            "=" * 60,
             f"【本期播客话题】{plan.topic}",
-            f"【摘要】{plan.summary}",
-            "【讨论要点】" + " / ".join(plan.talking_point_texts()),
+            f"【节目摘要】{plan.summary}",
             "",
-            "【深度搜索资料】",
         ]
+
+        # --- Layer 1: Current state (news anchor — "what's happening NOW") ---
+        lines.append("【当前状况——新闻锚点】")
+        for info in detailed_info[:2]:
+            if info.answer:
+                lines.append(f"  {info.answer[:400]}")
+            for r in info.results[:1]:
+                lines.append(f"  · {r.title}: {r.content[:250]}")
+        lines.append("")
+
+        # --- Layer 2: Historical context ("how we got here") ---
+        historical_items = detailed_info[2:4] if len(detailed_info) > 2 else []
+        if historical_items:
+            lines.append("【历史脉络——这是怎么形成的】")
+            for info in historical_items:
+                if info.answer:
+                    lines.append(f"  {info.answer[:400]}")
+                for r in info.results[:1]:
+                    lines.append(f"  · {r.title}: {r.content[:250]}")
+            lines.append("")
+
+        # --- Layer 3: Forward implications ("where this leads") ---
+        forward_items = detailed_info[4:] if len(detailed_info) > 4 else []
+        if forward_items:
+            lines.append("【前赋与影响——可能的多种未来】")
+            for info in forward_items:
+                if info.answer:
+                    lines.append(f"  {info.answer[:400]}")
+                for r in info.results[:1]:
+                    lines.append(f"  · {r.title}: {r.content[:250]}")
+            lines.append("")
+
+        # --- Full research archive (for fact/data lookups) ---
+        lines.append("【全量搜索资料（可引用事实、数据、案例）】")
         for info in detailed_info:
             lines.append(f"--- 搜索: {info.query} ---")
             if info.answer:
-                lines.append(info.answer)
-            for result in info.results[:3]:
-                lines.append(f"  · {result.title}: {result.content[:300]}")
+                lines.append(info.answer[:300])
+            for result in info.results[:2]:
+                lines.append(f"  · {result.title}: {result.content[:200]}")
+        lines.append("")
+
+        # --- RAG: past episodes, expert opinions ---
+        if rag_context:
+            lines.append("【知识库（历期节目观点、专家评论、事实核查）】")
+            lines.append(rag_context[:1500])
             lines.append("")
 
-        if rag_context:
-            lines.append("")
-            lines.append("【知识库检索结果（往期节目、专家观点、事实核查、背景资料）】")
-            lines.append(rag_context)
+        # --- Key reminders for agents ---
+        lines.append("【讨论要点提醒】" + " | ".join(plan.talking_point_texts()))
+        lines.append("【反直觉角度】" + (plan.unexpected_angle or "暂无"))
+        lines.append("=" * 60)
 
         return "\n".join(lines)
+
+    @staticmethod
+    def _trim_shared_context(
+        ctx: list[dict],
+        max_turns: int = 16,
+    ) -> list[dict]:
+        """Maintain a sliding window over shared conversation context.
+
+        Retains ALL system messages plus the most recent max_turns
+        non-system messages. This prevents ever-growing context from
+        degrading quality or exceeding token budgets.
+        """
+        if not ctx:
+            return ctx
+        system_msgs = [m for m in ctx if m.get("role") == "system"]
+        non_system = [m for m in ctx if m.get("role") != "system"]
+        if len(non_system) <= max_turns:
+            return ctx
+        return system_msgs + non_system[-max_turns:]
 
     @staticmethod
     def _get_speaking_order(round_idx: int, guest_names: list[str]) -> list[str]:
@@ -915,3 +1077,4 @@ class PodcastOrchestrator:
             return []
         start = round_idx % n
         return guest_names[start:] + guest_names[:start]
+
