@@ -35,73 +35,112 @@
         <!-- Content -->
         <div class="drawer-content">
           <div class="badges-list">
-            <!-- Guest Badges -->
+            <!-- Guest ID Badges -->
             <div
               v-for="guest in guests"
               :key="guest.name"
-              class="badge-section"
+              class="id-card-section"
             >
-              <!-- Lanyard -->
-              <div class="lanyard-container">
-                <div class="lanyard-ribbon">
-                  <div class="lanyard-hole"></div>
-                </div>
-                <div class="lanyard-clip">
-                  <div class="clip-inner"></div>
+              <!-- Lanyard cord -->
+              <div class="badge-lanyard">
+                <div class="badge-cord"></div>
+                <div class="badge-punch-ring">
+                  <div class="badge-punch-hole"></div>
                 </div>
               </div>
-              
-              <!-- Badge Card -->
-              <div 
-                class="badge-card" 
-                :class="{ 
-                  selected: selectedGuests.includes(guest.name),
-                  expanded: expandedBadge === guest.name || editingGuest === guest.name
+
+              <!-- ID Badge -->
+              <div
+                class="id-badge"
+                :class="{
+                  'id-badge--selected': selectedGuests.includes(guest.name),
+                  'id-badge--expanded': expandedBadge === guest.name || editingGuest === guest.name
                 }"
                 @click="toggleExpand(guest.name)"
               >
-                <div class="badge-inner">
-                  <!-- Avatar with ring -->
-                  <div class="avatar-container">
-                    <div class="avatar-ring" :style="{ borderColor: getMbtiColor(guest.mbti) }">
-                      <div class="badge-avatar" :style="{ background: getAvatarGradient(guest.mbti) }">
-                        {{ guest.name.charAt(0) }}
-                      </div>
-                    </div>
-                    <div v-if="selectedGuests.includes(guest.name)" class="selected-badge">
-                      <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="3">
-                        <polyline points="20,6 9,17 4,12"/>
-                      </svg>
-                    </div>
-                  </div>
-                  
-                  <!-- Info -->
-                  <div class="badge-info">
-                    <h3>{{ guest.name }}</h3>
-                    <div class="badge-tags">
-                      <span class="tag mbti" :style="{ background: getMbtiBg(guest.mbti) }">{{ guest.mbti || 'MBTI' }}</span>
-                      <span class="tag occupation">{{ guest.occupation || '职业' }}</span>
+                <!-- Left color accent strip -->
+                <div class="id-badge__strip" :style="{ background: getAvatarGradient(guest.mbti) }"></div>
+
+                <!-- Main content area -->
+                <div class="id-badge__body">
+                  <!-- Header row: org label / selected chip / GUEST type -->
+                  <div class="id-badge__header">
+                    <span class="id-badge__org">🎙 MindCast</span>
+                    <div class="id-badge__header-right">
+                      <transition name="chip-pop">
+                        <span v-if="selectedGuests.includes(guest.name)" class="id-badge__selected-chip">
+                          <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20,6 9,17 4,12"/></svg>
+                          已选
+                        </span>
+                      </transition>
+                      <span class="id-badge__type">GUEST</span>
                     </div>
                   </div>
+
+                  <div class="id-badge__divider"></div>
+
+                  <!-- Content row: photo + meta -->
+                  <div class="id-badge__content">
+                    <div class="id-badge__photo" :style="{ background: getAvatarGradient(guest.mbti) }">
+                      {{ guest.name.charAt(0) }}
+                    </div>
+                    <div class="id-badge__meta">
+                      <div class="id-badge__name">{{ guest.name }}</div>
+                      <div class="id-badge__title">{{ guest.occupation || '播客嘉宾' }}</div>
+                      <span
+                        class="id-badge__mbti"
+                        :style="{ color: getMbtiColor(guest.mbti), background: getMbtiBg(guest.mbti) }"
+                      >{{ guest.mbti || '?' }}</span>
+                    </div>
+                    <!-- Click-to-select area on the right -->
+                    <button
+                      class="id-badge__select-btn"
+                      :class="{ 'id-badge__select-btn--active': selectedGuests.includes(guest.name) }"
+                      :style="selectedGuests.includes(guest.name) ? { borderColor: getMbtiColor(guest.mbti), background: getMbtiBg(guest.mbti) } : {}"
+                      @click.stop="toggleSelect(guest.name)"
+                    >
+                      <svg v-if="selectedGuests.includes(guest.name)" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20,6 9,17 4,12"/></svg>
+                      <svg v-else viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="4"/></svg>
+                    </button>
+                  </div>
+
+                  <!-- Footer: barcode decoration -->
+                  <div class="id-badge__footer">
+                    <div class="id-badge__barcode">
+                      <div class="bc-bar" v-for="i in 28" :key="i"></div>
+                    </div>
+                    <span class="id-badge__serial">#{{ guest.name.charCodeAt(0).toString(16).toUpperCase().padStart(4,'0') }}</span>
+                  </div>
                 </div>
-                
-                <!-- Actions (visible when expanded) -->
-                <div v-if="expandedBadge === guest.name" class="badge-actions" @click.stop>
-                  <button class="btn-action edit" @click="startEdit(guest)">
-                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
-                      <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                    </svg>
-                    编辑
-                  </button>
-                  <button class="btn-action delete" @click="removeGuest(guest.name)">
-                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-                      <polyline points="3,6 5,6 21,6"/>
-                      <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
-                    </svg>
-                    删除
-                  </button>
+
+                <!-- Expand chevron -->
+                <div class="id-badge__expand-hint">
+                  <svg
+                    viewBox="0 0 24 24" width="14" height="14" fill="none"
+                    stroke="currentColor" stroke-width="2"
+                    :style="{ transform: (expandedBadge === guest.name) ? 'rotate(180deg)' : 'rotate(0)' }"
+                  >
+                    <polyline points="6,9 12,15 18,9"/>
+                  </svg>
                 </div>
+              </div>
+
+              <!-- Action buttons (shown when expanded) -->
+              <div v-if="expandedBadge === guest.name" class="id-badge__actions" @click.stop>
+                <button class="btn-action edit" @click="startEdit(guest)">
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                    <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                  </svg>
+                  编辑资料
+                </button>
+                <button class="btn-action delete" @click="removeGuest(guest.name)">
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="3,6 5,6 21,6"/>
+                    <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+                  </svg>
+                  移除嘉宾
+                </button>
               </div>
               
               <!-- Inline Edit Form -->
@@ -208,25 +247,25 @@
               </transition>
             </div>
 
-            <!-- Add New Section -->
-            <div class="badge-section" v-if="!addingGuest">
-              <div class="lanyard-container">
-                <div class="lanyard-ribbon add-ribbon">
-                  <div class="lanyard-hole"></div>
-                </div>
-                <div class="lanyard-clip">
-                  <div class="clip-inner"></div>
+            <!-- Add New Badge -->
+            <div class="id-card-section" v-if="!addingGuest">
+              <div class="badge-lanyard">
+                <div class="badge-cord add-cord"></div>
+                <div class="badge-punch-ring add-punch">
+                  <div class="badge-punch-hole"></div>
                 </div>
               </div>
-              <div class="badge-card add-card" @click="startAdd">
-                <div class="add-content">
-                  <div class="add-icon">
-                    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
+              <div class="id-badge id-badge--add" @click="startAdd">
+                <div class="id-badge__strip add-strip"></div>
+                <div class="id-badge__add-content">
+                  <div class="id-badge__add-icon">
+                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8">
                       <line x1="12" y1="5" x2="12" y2="19"/>
                       <line x1="5" y1="12" x2="19" y2="12"/>
                     </svg>
                   </div>
-                  <span>新增嘉宾</span>
+                  <span class="id-badge__add-label">新增嘉宾</span>
+                  <span class="id-badge__add-sub">最多可添加 3 位</span>
                 </div>
               </div>
             </div>
@@ -234,12 +273,10 @@
             <!-- Add Form -->
             <transition name="expand">
               <div v-if="addingGuest" class="add-form-section">
-                <div class="lanyard-container">
-                  <div class="lanyard-ribbon">
-                    <div class="lanyard-hole"></div>
-                  </div>
-                  <div class="lanyard-clip">
-                    <div class="clip-inner"></div>
+                <div class="badge-lanyard">
+                  <div class="badge-cord"></div>
+                  <div class="badge-punch-ring">
+                    <div class="badge-punch-hole"></div>
                   </div>
                 </div>
                 <div class="edit-form">
@@ -373,6 +410,19 @@ function toggleExpand(name) {
     expandedBadge.value = name
     editingGuest.value = null
   }
+}
+
+function toggleSelect(name) {
+  const current = [...props.selectedGuests]
+  const idx = current.indexOf(name)
+  if (idx >= 0) {
+    current.splice(idx, 1)
+  } else {
+    if (current.length < 3) {
+      current.push(name)
+    }
+  }
+  emit('update:selectedGuests', current)
 }
 
 function startEdit(guest) {
@@ -565,187 +615,301 @@ function getAvatarGradient(mbti) {
 .badges-list {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1.25rem;
 }
 
-/* Badge Section */
-.badge-section {
+/* ─── ID Card Section ─────────────────────────────── */
+.id-card-section {
   display: flex;
   flex-direction: column;
   align-items: center;
 }
 
-/* Lanyard - Premium Design */
-.lanyard-container {
+/* Lanyard cord + hole */
+.badge-lanyard {
   display: flex;
   flex-direction: column;
   align-items: center;
-  margin-bottom: -20px;
-  z-index: 10;
+  z-index: 2;
+  margin-bottom: -10px;
 }
 
-.lanyard-ribbon {
-  width: 60px;
-  height: 36px;
-  background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
-  clip-path: polygon(20% 0%, 80% 0%, 100% 100%, 0% 100%);
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding-top: 6px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+.badge-cord {
+  width: 2px;
+  height: 28px;
+  background: linear-gradient(180deg, transparent 0%, #94a3b8 40%, #64748b 100%);
 }
 
-.lanyard-ribbon.add-ribbon {
-  background: linear-gradient(180deg, #6366f1 0%, #4f46e5 100%);
+.add-cord {
+  background: linear-gradient(180deg, transparent 0%, #a5b4fc 40%, #818cf8 100%);
 }
 
-.lanyard-hole {
-  width: 14px;
-  height: 14px;
-  background: linear-gradient(180deg, #f1f5f9 0%, #cbd5e1 100%);
+.badge-punch-ring {
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
-}
-
-.lanyard-clip {
-  width: 24px;
-  height: 16px;
-  background: linear-gradient(180deg, #fbbf24 0%, #d97706 100%);
-  border-radius: 0 0 4px 4px;
+  background: linear-gradient(135deg, #cbd5e1 0%, #94a3b8 100%);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.25), inset 0 1px 2px rgba(255,255,255,0.4);
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
-.clip-inner {
+.add-punch {
+  background: linear-gradient(135deg, #c7d2fe 0%, #818cf8 100%);
+}
+
+.badge-punch-hole {
   width: 10px;
-  height: 6px;
-  background: linear-gradient(180deg, #fcd34d 0%, #fbbf24 100%);
-  border-radius: 2px;
+  height: 10px;
+  border-radius: 50%;
+  background: #e2e8f0;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
 }
 
-/* Badge Card */
-.badge-card {
+/* ─── ID Badge ─────────────────────────────────────── */
+.id-badge {
   width: 100%;
-  background: white;
-  border-radius: 16px;
-  padding: 1rem 1.25rem;
+  background: #ffffff;
+  border-radius: 14px;
+  border: 1.5px solid #e2e8f0;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06), 0 0 0 0 transparent;
+  display: flex;
+  overflow: hidden;
   cursor: pointer;
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 4px 12px rgba(0, 0, 0, 0.03);
-  border: 2px solid transparent;
+  position: relative;
 }
 
-.badge-card:hover {
+.id-badge:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15), 0 8px 24px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+  border-color: #c7d2fe;
 }
 
-.badge-card.selected {
+.id-badge--selected {
   border-color: #6366f1;
-  background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);
+  box-shadow: 0 0 0 3px rgba(99,102,241,0.12), 0 4px 16px rgba(99,102,241,0.15);
+  background: linear-gradient(135deg, #ffffff 0%, #f5f3ff 100%);
 }
 
-.badge-card.expanded {
+.id-badge--expanded {
   border-color: #6366f1;
   border-bottom-left-radius: 4px;
   border-bottom-right-radius: 4px;
 }
 
-.badge-inner {
+/* Left accent strip */
+.id-badge__strip {
+  width: 6px;
+  flex-shrink: 0;
+}
+
+/* Badge body */
+.id-badge__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0.55rem 0.75rem 0.45rem 0.7rem;
+}
+
+/* Header row */
+.id-badge__header {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  justify-content: space-between;
+  margin-bottom: 0.3rem;
 }
 
-/* Avatar */
-.avatar-container {
-  position: relative;
+.id-badge__org {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #475569;
+  text-transform: uppercase;
 }
 
-.avatar-ring {
-  width: 56px;
-  height: 56px;
-  border-radius: 14px;
-  border: 3px solid;
+.id-badge__header-right {
   display: flex;
   align-items: center;
-  justify-content: center;
-  background: white;
+  gap: 5px;
 }
 
-.badge-avatar {
-  width: 46px;
-  height: 46px;
+.id-badge__type {
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  color: #94a3b8;
+  text-transform: uppercase;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+
+.id-badge__selected-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: #6366f1;
+  background: #ede9fe;
+  border: 1px solid #c4b5fd;
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+
+/* Divider */
+.id-badge__divider {
+  height: 1px;
+  background: linear-gradient(90deg, #e2e8f0 60%, transparent 100%);
+  margin-bottom: 0.4rem;
+}
+
+/* Content row */
+.id-badge__content {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex: 1;
+}
+
+.id-badge__photo {
+  width: 44px;
+  height: 44px;
   border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
-  font-size: 1.25rem;
-  font-weight: 700;
+  color: rgba(255,255,255,0.95);
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
 }
 
-.selected-badge {
-  position: absolute;
-  top: -4px;
-  right: -4px;
-  width: 20px;
-  height: 20px;
-  background: #6366f1;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  border: 2px solid white;
-  box-shadow: 0 2px 4px rgba(99, 102, 241, 0.4);
-}
-
-/* Info */
-.badge-info {
+.id-badge__meta {
   flex: 1;
   min-width: 0;
 }
 
-.badge-info h3 {
-  font-size: 1rem;
-  font-weight: 600;
-  color: #1e293b;
-  margin-bottom: 0.35rem;
+.id-badge__name {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.2;
+  margin-bottom: 0.15rem;
+  letter-spacing: -0.01em;
 }
 
-.badge-tags {
+.id-badge__title {
+  font-size: 0.72rem;
+  color: #475569;
+  line-height: 1.3;
+  margin-bottom: 0.3rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.id-badge__mbti {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  border-radius: 5px;
+  padding: 2px 7px;
+}
+
+/* Select button */
+.id-badge__select-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1.5px solid #e2e8f0;
+  background: #f8fafc;
   display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  color: #94a3b8;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.2s;
 }
 
-.tag {
-  padding: 3px 8px;
-  border-radius: 6px;
-  font-size: 0.7rem;
-  font-weight: 600;
+.id-badge__select-btn:hover {
+  border-color: #818cf8;
+  color: #6366f1;
+  background: #f5f3ff;
 }
 
-.tag.mbti {
+.id-badge__select-btn--active {
   color: #6366f1;
 }
 
-.tag.occupation {
-  background: #f1f5f9;
-  color: #64748b;
+/* Footer barcode */
+.id-badge__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 0.45rem;
+  padding-top: 0.35rem;
+  border-top: 1px dashed #e2e8f0;
 }
 
-/* Actions */
-.badge-actions {
+.id-badge__barcode {
+  display: flex;
+  align-items: flex-end;
+  gap: 1.5px;
+  height: 16px;
+}
+
+.bc-bar {
+  width: 2px;
+  background: #94a3b8;
+  border-radius: 1px;
+  height: 10px;
+}
+.bc-bar:nth-child(3n)   { height: 16px; width: 1px; }
+.bc-bar:nth-child(5n)   { height: 8px; }
+.bc-bar:nth-child(7n)   { height: 14px; }
+.bc-bar:nth-child(2n)   { width: 1px; background: #cbd5e1; }
+.bc-bar:nth-child(11n)  { height: 12px; width: 3px; }
+.bc-bar:nth-child(13n)  { height: 16px; }
+
+.id-badge__serial {
+  font-size: 0.58rem;
+  font-family: monospace;
+  letter-spacing: 0.05em;
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+/* Expand chevron */
+.id-badge__expand-hint {
+  position: absolute;
+  bottom: 6px;
+  right: 10px;
+  color: #94a3b8;
+  transition: transform 0.2s;
+  pointer-events: none;
+}
+
+/* ─── Action Buttons (below card) ───────────────────── */
+.id-badge__actions {
+  width: 100%;
   display: flex;
   gap: 0.5rem;
-  margin-top: 1rem;
-  padding-top: 1rem;
-  border-top: 1px solid #e2e8f0;
+  margin-top: -4px;
+  padding: 0.6rem 0.75rem 0.75rem;
+  background: white;
+  border: 1.5px solid #6366f1;
+  border-top: none;
+  border-radius: 0 0 12px 12px;
+  box-shadow: 0 4px 12px rgba(99,102,241,0.1);
 }
 
 .btn-action {
@@ -753,66 +917,102 @@ function getAvatarGradient(mbti) {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 10px;
-  border-radius: 10px;
-  font-size: 0.8rem;
+  gap: 5px;
+  padding: 9px;
+  border-radius: 9px;
+  font-size: 0.78rem;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .btn-action.edit {
-  background: #f1f5f9;
+  background: #f8fafc;
   border: 1px solid #e2e8f0;
   color: #475569;
 }
-
-.btn-action.edit:hover {
-  background: #e2e8f0;
-  color: #1e293b;
-}
+.btn-action.edit:hover { background: #e2e8f0; color: #1e293b; }
 
 .btn-action.delete {
   background: #fef2f2;
   border: 1px solid #fecaca;
   color: #dc2626;
 }
+.btn-action.delete:hover { background: #fee2e2; color: #b91c1c; }
 
-.btn-action.delete:hover {
-  background: #fee2e2;
-  color: #b91c1c;
+/* ─── Add Badge ─────────────────────────────────────── */
+.id-badge--add {
+  border: 2px dashed #c7d2fe;
+  background: linear-gradient(135deg, #f8fafc 0%, #f5f3ff 100%);
+  min-height: 80px;
 }
 
-/* Add Card */
-.add-card {
-  border: 2px dashed #cbd5e1;
-  background: #f8fafc;
+.id-badge--add:hover {
+  border-color: #818cf8;
+  background: linear-gradient(135deg, #f0f1fe 0%, #ede9fe 100%);
+  transform: translateY(-2px);
 }
 
-.add-card:hover {
-  border-color: #6366f1;
-  background: #f5f3ff;
+.add-strip {
+  background: linear-gradient(180deg, #818cf8 0%, #6366f1 100%);
+  opacity: 0.6;
 }
 
-.add-content {
+.id-badge__add-content {
+  flex: 1;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.75rem;
-  color: #64748b;
+  gap: 4px;
+  padding: 1rem;
+  color: #6366f1;
 }
 
-.add-icon {
-  width: 40px;
-  height: 40px;
-  background: white;
+.id-badge__add-icon {
+  width: 38px;
+  height: 38px;
   border-radius: 10px;
+  border: 1.5px dashed #818cf8;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid #e2e8f0;
+  background: white;
+  color: #6366f1;
+  transition: all 0.2s;
 }
+
+.id-badge--add:hover .id-badge__add-icon {
+  background: #6366f1;
+  color: white;
+  border-color: #6366f1;
+}
+
+.id-badge__add-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #6366f1;
+}
+
+.id-badge__add-sub {
+  font-size: 0.68rem;
+  color: #818cf8;
+}
+
+/* Add form section wrapper */
+/* Add form section wrapper */
+.add-form-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+/* Chip pop animation */
+.chip-pop-enter-active { transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.chip-pop-leave-active { transition: all 0.15s ease; }
+.chip-pop-enter-from  { opacity: 0; transform: scale(0.6); }
+.chip-pop-leave-to    { opacity: 0; transform: scale(0.8); }
 
 /* Detail View */
 .detail-view {
