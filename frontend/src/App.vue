@@ -43,11 +43,7 @@
     
     <footer class="app-footer">
       <div class="footer-content">
-        <div class="footer-brand">
-          <span class="footer-logo">🎙️</span>
-          <span class="footer-name">圆桌派</span>
-        </div>
-        <span class="footer-copyright">© 2026 · 基于 LangGraph + MiniMax TTS</span>
+        <span class="footer-copyright">· 更优质的AI播客创作体验</span>
       </div>
     </footer>
 
@@ -297,28 +293,13 @@ body {
   margin: 0 auto;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-}
-
-.footer-brand {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.footer-logo {
-  font-size: 1.2rem;
-}
-
-.footer-name {
-  font-weight: 700;
-  font-size: 0.9rem;
-  color: var(--c-text-1);
+  justify-content: center;
 }
 
 .footer-copyright {
   color: var(--c-text-3);
-  font-size: 0.78rem;
+  font-size: 0.85rem;
+  font-weight: 500;
 }
 
 /* ── Scrollbar ── */
