@@ -16,6 +16,7 @@ wheels/
 output/episodes/*.mp3
 output/episodes/*.json
 output/test_*.mp3
+output/episodes/segments/
 
 # Node.js
 frontend/node_modules/
@@ -38,3 +39,4 @@ __pycache__/
 output/episodes/*.json
 output/episodes/*.wav
 output/episodes/*.mp3
+output/episodes/segments/*
