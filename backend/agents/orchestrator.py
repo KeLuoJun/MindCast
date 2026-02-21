@@ -715,19 +715,31 @@ class PodcastOrchestrator:
                     f"追问方向：{depth_hint or '把讨论落回到听众的真实生活'}。"
                 )
 
-            trimmed_ctx = self._trim_shared_context(shared_context)
-            host_intro = await self.host.generate_line(
-                trimmed_ctx,
-                intro_technique + f"\n不要说'接下来我们来讨论'这种过渡套话。",
-            )
-            _append_line(host_intro)
+            # tp_idx == 0: the opening_line already introduced the topic and asked
+            # the first question, so skip an extra host intro to avoid 3+ consecutive
+            # host lines before any guest has spoken.
+            if tp_idx > 0:
+                trimmed_ctx = self._trim_shared_context(shared_context)
+                host_intro = await self.host.generate_line(
+                    trimmed_ctx,
+                    intro_technique + "\n不要说'接下来我们来讨论'这种过渡套话。",
+                )
+                _append_line(host_intro)
 
             # Determine speaking order and which guests speak this round
             order = self._get_speaking_order(tp_idx, guest_names)
             speakers_this_round = order[:2] if tp_idx < len(
                 plan.talking_points) - 1 else order
 
+            # Track speakers who already contributed during an interruption so
+            # their normal turn is not generated again (would cause duplicate lines).
+            already_spoken_this_round: set[str] = set()
+
             for sp_idx, guest_name in enumerate(speakers_this_round):
+                # Skip speakers who already contributed during an interruption
+                if guest_name in already_spoken_this_round:
+                    continue
+
                 guest = guest_map[guest_name]
 
                 # --- Interruption simulation ---
@@ -778,6 +790,10 @@ class PodcastOrchestrator:
                     _append_line(resume_line)
 
                     interruption_count += 1
+                    # Mark both speakers as handled so they don't get a second
+                    # normal turn when the outer loop continues.
+                    already_spoken_this_round.add(guest_name)
+                    already_spoken_this_round.add(interrupter_name)
                     state["run_logger"].event(
                         "dialogue",
                         "interruption occurred",
@@ -787,7 +803,6 @@ class PodcastOrchestrator:
                             "talking_point": talking_point,
                         },
                     )
-                    # Skip the interrupter's normal turn since they already spoke
                     continue
 
                 # Normal guest turn
@@ -909,6 +924,65 @@ class PodcastOrchestrator:
 
         return dialogue
 
+    async def _generate_article_text(self, episode: "Episode") -> str:
+        """Generate a deep-read article from the episode content.
+
+        Works without research context (e.g. in the step-by-step synthesis
+        path where deep research was not performed).
+        """
+        dialogue_excerpt = "\n".join(
+            f"{line.speaker}：{line.text}"
+            for line in (episode.dialogue or [])[:40]
+        )
+        guest_names = "、".join(episode.guests) if episode.guests else "嘉宾"
+
+        system_prompt = """你是一位精通科技与社会议题的中文深度内容编辑，擅长将播客讨论提炼为独立成篇的高质量文章。
+你的写作风格：
+- 观点鲜明、逻辑严密，有自己的判断和立场
+- 用具体案例、数据和类比解释复杂概念
+- 语言克制有力，不用空洞词汇
+- 结构清晰但不生硬，行文流畅自然
+- 适合发布在《晚点LatePost》《虎嗅》《36氪》等深度科技媒体
+
+【⛔ 绝对禁止的写作痕迹】
+- 三段式"第一……第二……第三"
+- "值得注意的是"、"不可忽视"、"此外"、"与此同时"、"综上所述"
+- "赋能"、"打造"、"引领"、"助力"、"深耕"
+- "让我们拭目以待"、"未来可期"
+- 每句话长度接近、节奏单调
+- 空洞总结段（要么给新洞察，要么不总结）"""
+
+        user_prompt = f"""本期播客主题：{episode.topic}
+
+【节目梗概】
+{episode.summary}
+
+【部分对话精华】
+{dialogue_excerpt}
+
+请根据以上内容，以**独立文章**的形式撰写一篇 1500-2500 字的深度文章。
+
+要求：
+1. 文章要能独立成篇，读者无需听播客也能完整理解
+2. 不要描述"本期节目讨论了……"——直接切入话题本身
+3. 文章结构自由，但逻辑线索清晰：通常包含核心观点引入、多角度分析、现实影响/启示
+4. 提炼播客中最有价值的洞见，加入必要的背景知识和你自己的分析判断
+5. 参考 {guest_names} 在对话中的核心论点，但以你自己的叙事语言转化，不要像"摘要"或"采访综述"
+6. 标题要吸引眼球，能准确传达文章核心角度（可以用副标题）
+7. 直接输出文章全文（含标题），不要有任何前缀说明
+
+现在开始写作："""
+
+        article_text = await self._llm.chat(
+            [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=0.75,
+            max_tokens=3000,
+        )
+        return (article_text or "").strip()
+
     async def synthesize_episode_from_script(
         self,
         *,
@@ -982,6 +1056,16 @@ class PodcastOrchestrator:
             )
             episode.audio_path = str(output_path)
             episode.duration_seconds = duration
+
+            # Auto-generate deep-read article (no user confirmation required)
+            await _emit("article", "正在撰写本期深度文章…")
+            try:
+                article_text = await self._generate_article_text(episode)
+                episode.article = article_text
+                await _emit("article", f"深度文章撰写完成（{len(article_text)} 字）")
+            except Exception as exc:
+                logger.warning("Article generation failed: %s", exc)
+                episode.article = ""
 
             metadata_path = episode.save_json(output_dir)
             await _emit(

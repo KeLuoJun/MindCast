@@ -1,12 +1,12 @@
 <template>
   <div class="episode-page" v-if="episode">
     <!-- Back Button -->
-    <router-link to="/" class="back-btn">
+    <a href="/" class="back-btn" @click.prevent="goBack">
       <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M19 12H5M12 19l-7-7 7-7"/>
       </svg>
       返回列表
-    </router-link>
+    </a>
 
     <!-- Episode Header Card (Unified) -->
     <header class="ep-header">
@@ -142,10 +142,20 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { useWorkflowStore } from '../stores/workflow'
 import PodcastPlayer from '../components/PodcastPlayer.vue'
 
+const router = useRouter()
+const workflowStore = useWorkflowStore()
 const props = defineProps({ id: String })
 const episode = ref(null)
+
+function goBack() {
+  workflowStore.resetWizard()
+  workflowStore.dismissNewEpisode()
+  router.push('/')
+}
 
 async function fetchEpisode() {
   try {

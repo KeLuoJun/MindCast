@@ -289,9 +289,9 @@
               </button>
             </div>
 
-            <!-- Script Preview (after generation) -->
+            <!-- Script Preview (after generation, hidden once speed-adjust begins) -->
             <transition name="fade">
-              <div v-if="store.hasScriptDraft" class="script-preview">
+              <div v-if="store.hasScriptDraft && !store.hasAudioAdjustDraft && !store.synthesizing" class="script-preview">
                 <div class="preview-header">
                   <h3>{{ store.scriptDraft.title }}</h3>
                   <p>{{ store.scriptDraft.summary }}</p>
@@ -382,7 +382,7 @@
                     @click="applySegmentSpeeds"
                   >
                     <span v-if="store.applyingSegmentSpeeds" class="spinner"></span>
-                    {{ store.applyingSegmentSpeeds ? '处理中...' : '应用倍速并重新处理音频' }}
+                    {{ store.applyingSegmentSpeeds ? '处理中...' : '应用&下一步' }}
                   </button>
                   <button class="btn-skip-adjust" @click="skipSegmentSpeedAdjust">跳过并完成</button>
                 </div>
@@ -390,7 +390,7 @@
             </transition>
           </div>
 
-          <div class="step-actions">
+          <div v-if="!isStepBusy" class="step-actions">
             <button class="btn-back" @click="prevStep">
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
                 <line x1="19" y1="12" x2="5" y2="12"/>
@@ -409,7 +409,7 @@
 </template>
 
 <script setup>
-import { ref, watch, nextTick, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, nextTick, onBeforeUnmount } from 'vue'
 import { useWorkflowStore } from '../stores/workflow'
 import GeneratePanel from './GeneratePanel.vue'
 
@@ -427,6 +427,15 @@ const previewStages = [
 const segmentSpeedError = ref('')
 const playingSegmentIndex = ref(null)
 const segmentPlayer = ref(null)
+
+// Hide the back button and step-actions whenever generation is in flight
+const isStepBusy = computed(() =>
+  store.generatingScript ||
+  store.synthesizing ||
+  store.generating ||
+  !!store.taskId ||
+  store.hasAudioAdjustDraft
+)
 
 function getPipelineStageClass(key) {
   const keys = previewStages.map(s => s.key)

@@ -16,13 +16,13 @@
           </div>
         </router-link>
         <nav class="header-nav">
-          <router-link to="/" class="nav-link" :class="{ active: $route.path === '/' }">
+          <a href="/" class="nav-link" :class="{ active: $route.path === '/' }" @click.prevent="goHome">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
               <polyline points="9,22 9,12 15,12 15,22"/>
             </svg>
             工作台
-          </router-link>
+          </a>
           <button class="nav-settings-btn" @click="settingsPanelOpen = true" title="系统配置">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="12" cy="12" r="3"/>
@@ -54,9 +54,21 @@
 
 <script setup>
 import { ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { useWorkflowStore } from './stores/workflow'
 import SettingsPanel from './components/SettingsPanel.vue'
 
+const router = useRouter()
+const workflowStore = useWorkflowStore()
 const settingsPanelOpen = ref(false)
+
+function goHome() {
+  workflowStore.dismissNewEpisode()
+  workflowStore.resetWizard()
+  if (router.currentRoute.value.path !== '/') {
+    router.push('/')
+  }
+}
 </script>
 
 <style>
