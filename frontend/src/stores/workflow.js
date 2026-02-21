@@ -29,6 +29,10 @@ export const useWorkflowStore = defineStore('workflow', () => {
   const synthesizing = ref(false)
   const taskId = ref(null)
   const scriptDraft = ref(null)
+  const audioAdjustEpisodeId = ref(null)
+  const audioAdjustLines = ref([])
+  const applyingSegmentSpeeds = ref(false)
+  const pendingAudioRetime = ref(false)
 
   // ── Preview task (step-by-step mode SSE) ──
   const previewStage = ref('')
@@ -47,6 +51,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
   const hasNews = computed(() => newsContent.value !== null)
   const effectiveTopic = computed(() => customTopic.value || selectedTopic.value || '')
   const hasScriptDraft = computed(() => scriptDraft.value && scriptDraft.value.dialogue?.length > 0)
+  const hasAudioAdjustDraft = computed(() => audioAdjustEpisodeId.value && audioAdjustLines.value.length > 0)
   const canGenerate = computed(
     () => hasNews.value && !!effectiveTopic.value && selectedGuests.value.length > 0
   )
@@ -149,6 +154,9 @@ export const useWorkflowStore = defineStore('workflow', () => {
   async function startGenerate() {
     if (!canGenerate.value) return
     generating.value = true
+    audioAdjustEpisodeId.value = null
+    audioAdjustLines.value = []
+    pendingAudioRetime.value = false
     try {
       const res = await fetch('/api/generate', {
         method: 'POST',
@@ -173,6 +181,9 @@ export const useWorkflowStore = defineStore('workflow', () => {
     previewStageDetail.value = '正在获取资讯...'
     previewTaskId.value = null
     scriptDraft.value = null
+    audioAdjustEpisodeId.value = null
+    audioAdjustLines.value = []
+    pendingAudioRetime.value = false
 
     // Tear down any existing SSE connection
     if (_previewEventSource) {
@@ -268,6 +279,8 @@ export const useWorkflowStore = defineStore('workflow', () => {
   async function confirmScriptSynthesis() {
     if (!hasScriptDraft.value) return
     synthesizing.value = true
+    audioAdjustEpisodeId.value = null
+    audioAdjustLines.value = []
     try {
       const payload = {
         title: scriptDraft.value.title,
@@ -284,6 +297,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
         body: JSON.stringify(payload)
       })
       const data = await res.json()
+      pendingAudioRetime.value = false
       taskId.value = data.task_id
     } catch (e) {
       console.error('Failed to start synthesis:', e)
@@ -291,10 +305,97 @@ export const useWorkflowStore = defineStore('workflow', () => {
     }
   }
 
-  function onGenerateCompleted(episodeId) {
+  async function prepareAudioAdjustment(episodeId) {
+    if (!episodeId) return
+    try {
+      const res = await fetch(`/api/episodes/${episodeId}`)
+      if (!res.ok) throw new Error('加载节目失败')
+      const data = await res.json()
+      audioAdjustEpisodeId.value = episodeId
+      audioAdjustLines.value = (data.dialogue || []).map(line => ({
+        speaker: line.speaker,
+        text: line.text,
+        speech_rate: Number(line.speech_rate ?? 1) || 1
+      }))
+      if (!audioAdjustLines.value.length && scriptDraft.value?.dialogue?.length) {
+        audioAdjustLines.value = scriptDraft.value.dialogue.map(line => ({
+          speaker: line.speaker,
+          text: line.text,
+          speech_rate: 1
+        }))
+      }
+    } catch (e) {
+      console.error('Failed to prepare segment speed adjust:', e)
+      newEpisodeId.value = episodeId
+      showNewEpisode.value = true
+    }
+  }
+
+  async function applySegmentSpeeds() {
+    if (!audioAdjustEpisodeId.value || !audioAdjustLines.value.length || applyingSegmentSpeeds.value) return
+    applyingSegmentSpeeds.value = true
+    try {
+      const res = await fetch(`/api/episodes/${audioAdjustEpisodeId.value}/audio/retime`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          line_speeds: audioAdjustLines.value.map(line => {
+            const speed = Number(line.speech_rate)
+            if (!Number.isFinite(speed)) return 1
+            return Math.max(0.5, Math.min(2, speed))
+          })
+        })
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data?.detail || '段级倍速处理失败')
+      }
+      pendingAudioRetime.value = true
+      taskId.value = data.task_id
+    } catch (e) {
+      console.error('Failed to apply segment speeds:', e)
+      throw e
+    } finally {
+      applyingSegmentSpeeds.value = false
+    }
+  }
+
+  async function cleanupEpisodeSegments(episodeId) {
+    if (!episodeId) return
+    try {
+      await fetch(`/api/episodes/${episodeId}/segments/cleanup`, { method: 'POST' })
+    } catch (e) {
+      console.error('Failed to cleanup segment audio files:', e)
+    }
+  }
+
+  async function skipSegmentSpeedAdjust() {
+    if (!audioAdjustEpisodeId.value) return
+    const episodeId = audioAdjustEpisodeId.value
+    await cleanupEpisodeSegments(episodeId)
+    audioAdjustEpisodeId.value = null
+    audioAdjustLines.value = []
+    pendingAudioRetime.value = false
+    onGenerateCompleted(episodeId)
+  }
+
+  async function onGenerateCompleted(episodeId) {
     generating.value = false
     synthesizing.value = false
     taskId.value = null
+    if (episodeId && pendingAudioRetime.value) {
+      await cleanupEpisodeSegments(episodeId)
+      pendingAudioRetime.value = false
+      newEpisodeId.value = episodeId
+      showNewEpisode.value = true
+      audioAdjustEpisodeId.value = null
+      audioAdjustLines.value = []
+      return
+    }
+    if (episodeId && workflowMode.value === 'step-by-step' && hasScriptDraft.value) {
+      prepareAudioAdjustment(episodeId)
+      return
+    }
     if (episodeId) {
       newEpisodeId.value = episodeId
       showNewEpisode.value = true
@@ -320,6 +421,10 @@ export const useWorkflowStore = defineStore('workflow', () => {
     synthesizing.value = false
     showNewEpisode.value = false
     newEpisodeId.value = null
+    audioAdjustEpisodeId.value = null
+    audioAdjustLines.value = []
+    applyingSegmentSpeeds.value = false
+    pendingAudioRetime.value = false
     previewStage.value = ''
     previewStageDetail.value = ''
     previewTaskId.value = null
@@ -346,6 +451,9 @@ export const useWorkflowStore = defineStore('workflow', () => {
     synthesizing,
     taskId,
     scriptDraft,
+    audioAdjustEpisodeId,
+    audioAdjustLines,
+    applyingSegmentSpeeds,
     newEpisodeId,
     showNewEpisode,
     guestDrawerOpen,
@@ -354,6 +462,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     hasNews,
     effectiveTopic,
     hasScriptDraft,
+    hasAudioAdjustDraft,
     canGenerate,
 
     // Preview SSE state
@@ -372,6 +481,9 @@ export const useWorkflowStore = defineStore('workflow', () => {
     generateScriptPreview,
     cancelScriptPreview,
     confirmScriptSynthesis,
+    prepareAudioAdjustment,
+    applySegmentSpeeds,
+    skipSegmentSpeedAdjust,
     onGenerateCompleted,
     dismissNewEpisode,
     resetWizard,

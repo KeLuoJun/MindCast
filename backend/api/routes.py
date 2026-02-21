@@ -17,6 +17,7 @@ from backend.api.schemas import (
     AppSettingsPatch,
     DialogueLineOut,
     EpisodeDetail,
+    EpisodeAudioRetimeRequest,
     EpisodeSummary,
     GuestGenerateRequest,
     GuestProfileIn,
@@ -454,6 +455,7 @@ async def synthesize_from_script(req: ScriptSynthesisRequest):
                     "ssml_text": line.text,
                     "emotion": line.emotion or "neutral",
                     "voice_id": line.voice_id or "",
+                    "speech_rate": line.speech_rate,
                 }
                 for line in req.dialogue
                 if line.text.strip()
@@ -498,6 +500,61 @@ async def synthesize_from_script(req: ScriptSynthesisRequest):
 
     _task_jobs[task_id] = asyncio.create_task(_run())
     return TaskCreatedResponse(task_id=task_id, message="语音合成任务已创建")
+
+
+@router.post("/episodes/{episode_id}/audio/retime", response_model=TaskCreatedResponse)
+async def retime_episode_audio(episode_id: str, req: EpisodeAudioRetimeRequest):
+    """Apply per-dialogue speech rates and rebuild episode audio in background."""
+    json_path = settings.output_dir / f"{episode_id}.json"
+    if not json_path.exists():
+        raise HTTPException(status_code=404, detail="Episode not found")
+
+    task_id = f"task_{len(_tasks) + 1}"
+    _tasks[task_id] = {
+        "status": "started",
+        "stage": "audio",
+        "detail": "正在准备段级倍速处理…",
+        "episode_id": episode_id,
+    }
+
+    async def _run():
+        orchestrator = PodcastOrchestrator()
+
+        async def _progress(stage: str, detail: str):
+            _tasks[task_id].update({"stage": stage, "detail": detail})
+
+        try:
+            episode = Episode.load_json(json_path)
+            await orchestrator.retime_episode_audio(
+                episode,
+                line_speeds=req.line_speeds,
+                progress=_progress,
+            )
+            _tasks[task_id].update({
+                "status": "completed",
+                "stage": "done",
+                "detail": f"段级倍速处理完成！ID: {episode.id}",
+                "episode_id": episode.id,
+            })
+        except asyncio.CancelledError:
+            _tasks[task_id].update({
+                "status": "cancelled",
+                "stage": "cancelled",
+                "detail": "任务已终止",
+            })
+            raise
+        except Exception as exc:
+            logger.exception("Episode audio retime failed")
+            _tasks[task_id].update({
+                "status": "failed",
+                "stage": "error",
+                "detail": str(exc),
+            })
+        finally:
+            _task_jobs.pop(task_id, None)
+
+    _task_jobs[task_id] = asyncio.create_task(_run())
+    return TaskCreatedResponse(task_id=task_id, message="段级倍速处理任务已创建")
 
 
 # ---------------------------------------------------------------------------
@@ -875,7 +932,12 @@ async def get_episode(episode_id: str):
         duration_seconds=ep.duration_seconds,
         has_audio=ep.audio_path is not None and Path(ep.audio_path).exists(),
         dialogue=[
-            DialogueLineOut(speaker=d.speaker, text=d.text, emotion=d.emotion)
+            DialogueLineOut(
+                speaker=d.speaker,
+                text=d.text,
+                emotion=d.emotion,
+                speech_rate=d.speech_rate,
+            )
             for d in ep.dialogue
         ],
         news_sources=[s.model_dump() for s in ep.news_sources],
@@ -920,11 +982,98 @@ async def delete_episode(episode_id: str):
     _safe_unlink(logs_dir / f"{episode_id}.jsonl")
     _safe_unlink(logs_dir / f"{episode_id}.debug.jsonl")
 
+    segments_dir = settings.output_dir / "segments" / episode_id
+    if segments_dir.exists() and segments_dir.is_dir():
+        for segment_file in segments_dir.glob("*"):
+            _safe_unlink(segment_file)
+            removed_files.append(str(segment_file))
+        try:
+            segments_dir.rmdir()
+            removed_files.append(str(segments_dir))
+        except OSError:
+            pass
+
     return {
         "status": "ok",
         "episode_id": episode_id,
         "removed_files": removed_files,
         "message": "节目已删除",
+    }
+
+
+@router.get("/episodes/{episode_id}/segments/{line_index}/audio")
+async def get_episode_segment_audio(episode_id: str, line_index: int):
+    """Stream one dialogue segment audio file for real-time preview/playback."""
+    json_path = settings.output_dir / f"{episode_id}.json"
+    if not json_path.exists():
+        raise HTTPException(status_code=404, detail="Episode not found")
+
+    ep = Episode.load_json(json_path)
+    if line_index < 0 or line_index >= len(ep.dialogue):
+        raise HTTPException(status_code=404, detail="Segment not found")
+
+    line = ep.dialogue[line_index]
+    segment_path = Path(
+        line.segment_audio_path) if line.segment_audio_path else None
+    if segment_path is None or not segment_path.exists():
+        fallback_dir = settings.output_dir / "segments" / episode_id
+        wav_fallback = fallback_dir / f"{line_index:04d}.wav"
+        mp3_fallback = fallback_dir / f"{line_index:04d}.mp3"
+        if wav_fallback.exists():
+            segment_path = wav_fallback
+        elif mp3_fallback.exists():
+            segment_path = mp3_fallback
+        else:
+            raise HTTPException(
+                status_code=404, detail="Segment audio not available")
+
+    suffix = segment_path.suffix.lower()
+    media_type = "audio/wav" if suffix == ".wav" else "audio/mpeg"
+    filename_ext = "wav" if suffix == ".wav" else "mp3"
+
+    return FileResponse(
+        str(segment_path),
+        media_type=media_type,
+        filename=f"airoundtable_{episode_id}_segment_{line_index}.{filename_ext}",
+    )
+
+
+@router.post("/episodes/{episode_id}/segments/cleanup")
+async def cleanup_episode_segments(episode_id: str):
+    """Delete per-segment temp audio files after final audio confirmation."""
+    json_path = settings.output_dir / f"{episode_id}.json"
+    if not json_path.exists():
+        raise HTTPException(status_code=404, detail="Episode not found")
+
+    episode = Episode.load_json(json_path)
+    removed_count = 0
+
+    for line in episode.dialogue:
+        if line.segment_audio_path:
+            segment_path = Path(line.segment_audio_path)
+            if segment_path.exists() and segment_path.is_file():
+                segment_path.unlink()
+                removed_count += 1
+            line.segment_audio_path = None
+
+    segments_dir = settings.output_dir / "segments" / episode_id
+    if segments_dir.exists() and segments_dir.is_dir():
+        for segment_file in segments_dir.glob("*"):
+            if segment_file.is_file():
+                segment_file.unlink()
+                removed_count += 1
+        try:
+            segments_dir.rmdir()
+        except OSError:
+            pass
+
+    episode.save_json(settings.ensure_output_dir())
+
+    return {
+        "status": "ok",
+        "episode_id": episode_id,
+        "removed_segments": removed_count,
+        "message": "段音频已清理",
     }
 
 

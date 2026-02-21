@@ -323,6 +323,71 @@
                 </button>
               </div>
             </transition>
+
+            <transition name="fade">
+              <div v-if="store.hasAudioAdjustDraft" class="segment-speed-panel">
+                <div class="segment-speed-header">
+                  <h3>段级倍速处理</h3>
+                  <p>语音已生成，可按文本段调整倍速后重新处理音频</p>
+                </div>
+
+                <div class="segment-speed-list">
+                  <div v-for="(line, idx) in store.audioAdjustLines" :key="idx" class="segment-speed-item">
+                    <div class="segment-line-meta">
+                      <div class="segment-line-left">
+                        <span class="segment-speaker">{{ line.speaker }}</span>
+                        <span class="segment-index">第 {{ idx + 1 }} 段</span>
+                      </div>
+                      <button class="btn-play-segment" @click="toggleSegmentPlayback(idx, line)">
+                        <svg v-if="playingSegmentIndex === idx" viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                          <rect x="6" y="5" width="4" height="14" />
+                          <rect x="14" y="5" width="4" height="14" />
+                        </svg>
+                        <svg v-else viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                          <polygon points="7,5 19,12 7,19" />
+                        </svg>
+                        {{ playingSegmentIndex === idx ? '停止' : '播放' }}
+                      </button>
+                    </div>
+                    <p class="segment-text">{{ line.text }}</p>
+                    <div class="segment-speed-control">
+                      <input
+                        v-model.number="line.speech_rate"
+                        type="range"
+                        min="0.5"
+                        max="2"
+                        step="0.1"
+                        @change="normalizeSpeechRate(line)"
+                      />
+                      <input
+                        v-model.number="line.speech_rate"
+                        type="number"
+                        min="0.5"
+                        max="2"
+                        step="0.1"
+                        class="speed-input"
+                        @change="normalizeSpeechRate(line)"
+                      />
+                      <span class="speed-unit">x</span>
+                    </div>
+                  </div>
+                </div>
+
+                <p v-if="segmentSpeedError" class="segment-speed-error">{{ segmentSpeedError }}</p>
+
+                <div class="segment-speed-actions">
+                  <button
+                    class="btn-confirm-synth"
+                    :disabled="store.applyingSegmentSpeeds"
+                    @click="applySegmentSpeeds"
+                  >
+                    <span v-if="store.applyingSegmentSpeeds" class="spinner"></span>
+                    {{ store.applyingSegmentSpeeds ? '处理中...' : '应用倍速并重新处理音频' }}
+                  </button>
+                  <button class="btn-skip-adjust" @click="skipSegmentSpeedAdjust">跳过并完成</button>
+                </div>
+              </div>
+            </transition>
           </div>
 
           <div class="step-actions">
@@ -344,7 +409,7 @@
 </template>
 
 <script setup>
-import { watch, nextTick } from 'vue'
+import { ref, watch, nextTick, onBeforeUnmount } from 'vue'
 import { useWorkflowStore } from '../stores/workflow'
 import GeneratePanel from './GeneratePanel.vue'
 
@@ -358,6 +423,10 @@ const previewStages = [
   { key: 'planning', label: '节目策划' },
   { key: 'dialogue', label: '生成文稿' },
 ]
+
+const segmentSpeedError = ref('')
+const playingSegmentIndex = ref(null)
+const segmentPlayer = ref(null)
 
 function getPipelineStageClass(key) {
   const keys = previewStages.map(s => s.key)
@@ -381,6 +450,25 @@ watch(() => store.scriptDraft, () => {
     document.querySelectorAll('.auto-textarea').forEach(autoResizeTextarea)
   })
 })
+
+watch(() => store.audioAdjustEpisodeId, () => {
+  stopSegmentPlayback()
+})
+
+watch(
+  () => store.audioAdjustLines.map(line => Number(line.speech_rate) || 1),
+  (rates) => {
+    if (
+      segmentPlayer.value &&
+      playingSegmentIndex.value !== null &&
+      rates[playingSegmentIndex.value] !== undefined
+    ) {
+      const rate = Math.max(0.5, Math.min(2, Number(rates[playingSegmentIndex.value]) || 1))
+      segmentPlayer.value.playbackRate = rate
+    }
+  },
+  { deep: true }
+)
 
 const steps = [
   { key: 'news', label: '获取资讯' },
@@ -432,6 +520,71 @@ function getSpeakerClass(speaker) {
   if (speaker.includes('伦理') || speaker.includes('志恒')) return 'ethics'
   return 'guest'
 }
+
+function normalizeSpeechRate(line) {
+  const speed = Number(line.speech_rate)
+  if (!Number.isFinite(speed)) {
+    line.speech_rate = 1
+    return
+  }
+  line.speech_rate = Math.max(0.5, Math.min(2, Number(speed.toFixed(1))))
+}
+
+async function applySegmentSpeeds() {
+  segmentSpeedError.value = ''
+  stopSegmentPlayback()
+  try {
+    await store.applySegmentSpeeds()
+  } catch (e) {
+    segmentSpeedError.value = e?.message || '段级倍速处理失败'
+  }
+}
+
+function stopSegmentPlayback() {
+  if (segmentPlayer.value) {
+    segmentPlayer.value.pause()
+    segmentPlayer.value.currentTime = 0
+    segmentPlayer.value = null
+  }
+  playingSegmentIndex.value = null
+}
+
+function toggleSegmentPlayback(index, line) {
+  if (!store.audioAdjustEpisodeId) return
+
+  if (playingSegmentIndex.value === index && segmentPlayer.value) {
+    stopSegmentPlayback()
+    return
+  }
+
+  stopSegmentPlayback()
+
+  const audio = new Audio(
+    `/api/episodes/${store.audioAdjustEpisodeId}/segments/${index}/audio?ts=${Date.now()}`
+  )
+  audio.playbackRate = Math.max(0.5, Math.min(2, Number(line.speech_rate) || 1))
+  audio.onended = () => stopSegmentPlayback()
+  audio.onerror = () => {
+    stopSegmentPlayback()
+    segmentSpeedError.value = `第 ${index + 1} 段音频播放失败`
+  }
+
+  segmentPlayer.value = audio
+  playingSegmentIndex.value = index
+  audio.play().catch(() => {
+    stopSegmentPlayback()
+    segmentSpeedError.value = `第 ${index + 1} 段音频播放失败`
+  })
+}
+
+function skipSegmentSpeedAdjust() {
+  stopSegmentPlayback()
+  store.skipSegmentSpeedAdjust()
+}
+
+onBeforeUnmount(() => {
+  stopSegmentPlayback()
+})
 
 defineExpose({ nextStep, prevStep })
 </script>
@@ -1361,6 +1514,266 @@ defineExpose({ nextStep, prevStep })
 .btn-confirm-synth:hover:not(:disabled) {
   box-shadow: 0 6px 20px rgba(46, 204, 113, 0.35);
   transform: translateY(-2px);
+}
+
+.segment-speed-panel {
+  margin-top: 1rem;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-lg);
+  background: var(--c-bg-warm);
+  padding: 1rem;
+}
+
+.segment-speed-header h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  color: var(--c-text-1);
+}
+
+.segment-speed-header p {
+  margin: 0.35rem 0 0;
+  color: var(--c-text-2);
+  font-size: 0.85rem;
+}
+
+.segment-speed-list {
+  margin-top: 0.85rem;
+  max-height: 42vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  padding-right: 4px;
+}
+
+.segment-speed-item {
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
+  padding: 0.65rem;
+}
+
+.segment-line-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.3rem;
+}
+
+.segment-line-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.segment-speaker {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--c-text-1);
+}
+
+.segment-index {
+  font-size: 0.74rem;
+  color: var(--c-text-3);
+}
+
+.segment-text {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.55;
+  color: var(--c-text-2);
+}
+
+.segment-speed-control {
+  margin-top: 0.45rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.segment-speed-control input[type="range"] {
+  flex: 1;
+}
+
+.speed-input {
+  width: 56px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-sm);
+  padding: 0.3rem 0.35rem;
+  font-size: 0.8rem;
+  color: var(--c-text-1);
+  background: var(--c-surface);
+}
+
+.speed-unit {
+  font-size: 0.8rem;
+  color: var(--c-text-3);
+}
+
+.btn-play-segment {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0.26rem 0.5rem;
+  border-radius: var(--r-full);
+  border: 1px solid var(--c-border);
+  background: var(--c-surface);
+  color: var(--c-text-2);
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.btn-play-segment:hover {
+  border-color: var(--c-primary);
+  color: var(--c-primary);
+}
+
+.segment-speed-actions {
+  margin-top: 0.8rem;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.btn-skip-adjust {
+  border: 1px solid var(--c-border);
+  background: var(--c-surface);
+  color: var(--c-text-2);
+  border-radius: var(--r-full);
+  padding: 0.68rem 1rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-skip-adjust:hover {
+  border-color: var(--c-primary);
+  color: var(--c-primary);
+}
+
+.segment-speed-error {
+  margin-top: 0.65rem;
+  color: #d92d20;
+  font-size: 0.8rem;
+}
+
+.segment-speed-panel {
+  margin-top: 1rem;
+  border: 2px solid var(--c-border);
+  border-radius: var(--r-lg);
+  background: var(--c-bg);
+  padding: 1rem;
+}
+
+.segment-speed-header {
+  margin-bottom: 0.85rem;
+}
+
+.segment-speed-header h3 {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--c-text-1);
+}
+
+.segment-speed-header p {
+  margin: 0.35rem 0 0;
+  font-size: 0.82rem;
+  color: var(--c-text-2);
+}
+
+.segment-speed-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  max-height: 42vh;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.segment-speed-item {
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
+  background: var(--c-surface);
+  padding: 0.65rem;
+}
+
+.segment-line-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.35rem;
+}
+
+.segment-speaker {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--c-text-1);
+}
+
+.segment-index {
+  font-size: 0.72rem;
+  color: var(--c-text-3);
+}
+
+.segment-text {
+  margin: 0;
+  color: var(--c-text-2);
+  font-size: 0.8rem;
+  line-height: 1.6;
+}
+
+.segment-speed-control {
+  margin-top: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.segment-speed-control input[type="range"] {
+  flex: 1;
+}
+
+.speed-input {
+  width: 62px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-sm);
+  padding: 4px 6px;
+  background: white;
+  color: var(--c-text-1);
+  font-size: 0.8rem;
+}
+
+.speed-unit {
+  font-size: 0.8rem;
+  color: var(--c-text-3);
+  font-weight: 700;
+}
+
+.segment-speed-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 0.85rem;
+}
+
+.btn-skip-adjust {
+  flex: 0 0 auto;
+  padding: 0.7rem 0.95rem;
+  border: 2px solid var(--c-border);
+  background: var(--c-surface);
+  color: var(--c-text-2);
+  border-radius: var(--r-full);
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.segment-speed-error {
+  margin-top: 0.65rem;
+  margin-bottom: 0;
+  color: var(--c-danger);
+  font-size: 0.8rem;
 }
 
 /* Spinner */

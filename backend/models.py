@@ -65,6 +65,8 @@ class DialogueLine(BaseModel):
     ssml_text: str           # text with TTS annotations (<#x#>, (laughs) etc.)
     emotion: str = "neutral"  # emotion hint for voice_setting
     voice_id: str = ""
+    speech_rate: float = 1.0
+    segment_audio_path: str | None = None
     pause_before: float = 0.0  # seconds
     pause_after: float = 0.3   # seconds
 

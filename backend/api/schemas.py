@@ -57,6 +57,7 @@ class ScriptLineIn(BaseModel):
     text: str
     emotion: str = "neutral"
     voice_id: str | None = None
+    speech_rate: float = Field(default=1.0, ge=0.5, le=2.0)
 
 
 class ScriptSynthesisRequest(BaseModel):
@@ -67,6 +68,11 @@ class ScriptSynthesisRequest(BaseModel):
     guests: list[str] = Field(default_factory=list)
     dialogue: list[ScriptLineIn] = Field(default_factory=list)
     news_sources: list[dict] = Field(default_factory=list)
+
+
+class EpisodeAudioRetimeRequest(BaseModel):
+    """Request body for retiming each dialogue segment of an episode audio."""
+    line_speeds: list[float] = Field(default_factory=list)
 
 
 class GuestGenerateRequest(BaseModel):
@@ -134,6 +140,7 @@ class DialogueLineOut(BaseModel):
     speaker: str
     text: str
     emotion: str
+    speech_rate: float = 1.0
 
 
 class EpisodeDetail(BaseModel):

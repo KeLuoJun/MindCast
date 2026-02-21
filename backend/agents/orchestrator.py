@@ -426,6 +426,7 @@ class PodcastOrchestrator:
         return {"episode": episode, "dialogue": dialogue}
 
     async def _node_synthesize_tts(self, state: OrchestratorState) -> OrchestratorState:
+        episode = state["episode"]
         dialogue = state.get("dialogue", [])
         await self._emit_progress(state, "audio", "正在实时合成语音…")
         audio_segments = await self._synthesize_dialogue_segments(
@@ -438,8 +439,9 @@ class PodcastOrchestrator:
             ),
             run_logger=state["run_logger"],
         )
+        self._persist_segment_audio_files(episode, dialogue, audio_segments)
         await self._emit_progress(state, "audio", "语音合成全部完成")
-        return {"audio_segments": audio_segments}
+        return {"audio_segments": audio_segments, "episode": episode}
 
     async def _node_stitch_audio(self, state: OrchestratorState) -> OrchestratorState:
         episode = state["episode"]
@@ -953,6 +955,8 @@ class PodcastOrchestrator:
                     line.voice_id = HOST_FIXED_VOICE_ID
                 if not line.ssml_text:
                     line.ssml_text = line.text
+                if line.speech_rate <= 0:
+                    line.speech_rate = 1.0
 
             await _emit("audio", "正在实时合成语音…")
             audio_segments = await self._synthesize_dialogue_segments(
@@ -960,6 +964,11 @@ class PodcastOrchestrator:
                 progress=lambda detail, payload: _emit(
                     "audio", detail, payload),
                 run_logger=run_log,
+            )
+            self._persist_segment_audio_files(
+                episode,
+                episode.dialogue,
+                audio_segments,
             )
 
             await _emit("audio", "正在拼接音频…")
@@ -990,6 +999,142 @@ class PodcastOrchestrator:
             logging.getLogger().removeHandler(ep_handler)
             ep_handler.close()
 
+    async def retime_episode_audio(
+        self,
+        episode: Episode,
+        *,
+        line_speeds: list[float],
+        progress: ProgressCallback = None,
+    ) -> Episode:
+        """Rebuild an episode audio by applying per-line speech rates."""
+        output_dir = settings.ensure_output_dir()
+        run_log = EpisodeRunLogger(output_dir / "logs" / f"{episode.id}.jsonl")
+
+        ep_handler = get_episode_file_handler(episode.id, output_dir)
+        logging.getLogger().addHandler(ep_handler)
+
+        async def _emit(stage: str, detail: str, payload: dict[str, Any] | None = None):
+            logger.info("[%s] %s", stage, detail)
+            run_log.event(stage, detail, payload=payload)
+            if progress:
+                await progress(stage, detail)
+
+        try:
+            try:
+                speaker_voice_map = self._build_speaker_voice_map(
+                    self._build_active_guests(episode.guests))
+            except Exception:
+                speaker_voice_map = {self.host.name: HOST_FIXED_VOICE_ID}
+            segment_items: list[tuple[str, float, float]] = []
+            for index, line in enumerate(episode.dialogue):
+                if line.speaker in speaker_voice_map and not line.voice_id:
+                    line.voice_id = speaker_voice_map[line.speaker]
+                elif not line.voice_id:
+                    line.voice_id = HOST_FIXED_VOICE_ID
+                if not line.ssml_text:
+                    line.ssml_text = line.text
+
+                requested_speed = (
+                    line_speeds[index] if index < len(
+                        line_speeds) else line.speech_rate
+                )
+                try:
+                    requested_speed = float(requested_speed)
+                except (TypeError, ValueError):
+                    requested_speed = 1.0
+                line.speech_rate = min(2.0, max(0.5, requested_speed))
+
+                segment_path = line.segment_audio_path
+                if not segment_path:
+                    segment_path = self._default_segment_path(episode, index)
+                if not Path(segment_path).exists():
+                    raise RuntimeError(f"缺少第{index + 1}段原始音频，无法进行本地倍速处理")
+                segment_items.append(
+                    (segment_path, line.pause_after, line.speech_rate)
+                )
+
+            await _emit("audio", "正在基于本地段音频进行倍速处理…")
+            for index, line in enumerate(episode.dialogue):
+                await _emit(
+                    "audio",
+                    f"段级处理 ({index + 1}/{len(episode.dialogue)}): {line.speaker}",
+                )
+                run_log.event(
+                    "audio",
+                    "local segment retime",
+                    payload={
+                        "index": index + 1,
+                        "speaker": line.speaker,
+                        "speech_rate": line.speech_rate,
+                        "segment_audio_path": segment_items[index][0],
+                    },
+                )
+
+            await _emit("audio", "正在重新拼接音频…")
+            output_path: Path
+            if episode.audio_path:
+                output_path = Path(episode.audio_path)
+            else:
+                audio_ext = settings.minimax_audio_format.lower()
+                if audio_ext not in {"mp3", "wav"}:
+                    audio_ext = "wav"
+                output_path = output_dir / f"{episode.id}.{audio_ext}"
+
+            duration = await self._audio.stitch_episode_from_local_segments(
+                segment_items=segment_items,
+                output_path=str(output_path),
+            )
+            episode.audio_path = str(output_path)
+            episode.duration_seconds = duration
+
+            metadata_path = episode.save_json(output_dir)
+            await _emit(
+                "done",
+                f"段级倍速处理完成！ID: {episode.id}",
+                payload={
+                    "episode_id": episode.id,
+                    "metadata_path": str(metadata_path),
+                    "audio_path": str(output_path),
+                    "duration_seconds": duration,
+                },
+            )
+            return episode
+        finally:
+            logging.getLogger().removeHandler(ep_handler)
+            ep_handler.close()
+
+    @staticmethod
+    def _segment_dir(episode: Episode) -> Path:
+        return settings.ensure_output_dir() / "segments" / episode.id
+
+    def _default_segment_path(self, episode: Episode, index: int) -> str:
+        audio_ext = settings.minimax_audio_format.lower()
+        if audio_ext not in {"mp3", "wav"}:
+            audio_ext = "wav"
+        return str(self._segment_dir(episode) / f"{index:04d}.{audio_ext}")
+
+    def _persist_segment_audio_files(
+        self,
+        episode: Episode,
+        dialogue: list[DialogueLine],
+        audio_segments: list[tuple[bytes, float]],
+    ) -> None:
+        segment_dir = self._segment_dir(episode)
+        segment_dir.mkdir(parents=True, exist_ok=True)
+
+        audio_ext = settings.minimax_audio_format.lower()
+        if audio_ext not in {"mp3", "wav"}:
+            audio_ext = "wav"
+
+        for index, line in enumerate(dialogue):
+            if index >= len(audio_segments):
+                line.segment_audio_path = None
+                continue
+            audio_bytes, _ = audio_segments[index]
+            segment_path = segment_dir / f"{index:04d}.{audio_ext}"
+            segment_path.write_bytes(audio_bytes)
+            line.segment_audio_path = str(segment_path)
+
     async def _synthesize_dialogue_segments(
         self,
         dialogue: list[DialogueLine],
@@ -1012,6 +1157,7 @@ class PodcastOrchestrator:
                     text=line.ssml_text,
                     voice_id=line.voice_id,
                     emotion=line.emotion,
+                    speed=line.speech_rate,
                 )
                 return index, line, audio_bytes
 
@@ -1044,6 +1190,7 @@ class PodcastOrchestrator:
                         "index": index + 1,
                         "speaker": line.speaker,
                         "bytes": len(audio_bytes),
+                        "speech_rate": line.speech_rate,
                         "pause_after": line.pause_after,
                     },
                 )

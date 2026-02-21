@@ -43,7 +43,7 @@
     
     <footer class="app-footer">
       <div class="footer-content">
-        <span class="footer-copyright">· 更优质的AI播客创作体验</span>
+        <span class="footer-copyright">· 更优质的AI播客创作体验 ·</span>
       </div>
     </footer>
 
