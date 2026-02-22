@@ -72,8 +72,14 @@
             <!-- Tavily -->
             <div class="settings-section">
               <div class="section-label">
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                Tavily 资讯搜索
+                <div class="section-label-content">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                  Tavily 资讯搜索
+                </div>
+                <a href="https://www.tavily.com/" target="_blank" class="external-link">
+                  获取 Key
+                  <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
+                </a>
               </div>
               <div class="field-group">
                 <div class="field">
@@ -99,8 +105,14 @@
             <!-- MiniMax TTS -->
             <div class="settings-section">
               <div class="section-label">
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 00-3 3v7a3 3 0 006 0V5a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
-                MiniMax TTS 语音合成
+                <div class="section-label-content">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 00-3 3v7a3 3 0 006 0V5a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+                  MiniMax TTS 语音合成
+                </div>
+                <a href="https://platform.minimaxi.com/user-center/basic-information/interface-key" target="_blank" class="external-link">
+                  获取 Key
+                  <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
+                </a>
               </div>
               <div class="field-group">
                 <div class="field">
@@ -415,13 +427,41 @@ watch(() => props.modelValue, (val) => {
 .section-label {
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: space-between;
   padding: 10px 14px;
   font-size: 0.78rem;
   font-weight: 700;
   color: var(--c-text-1);
   background: var(--c-bg-warm);
   border-bottom: 2px solid var(--c-border);
+}
+
+.section-label-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.external-link {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--c-primary);
+  text-decoration: none;
+  padding: 4px 8px;
+  background: white;
+  border: 1.5px solid var(--c-primary-soft);
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.external-link:hover {
+  background: var(--c-primary);
+  color: white;
+  border-color: var(--c-primary);
+  transform: translateY(-1px);
 }
 
 .section-label svg {
