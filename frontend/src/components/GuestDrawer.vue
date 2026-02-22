@@ -118,15 +118,15 @@
                         </div>
                         <div class="form-group">
                           <label>性格与主持效果描述</label>
-                          <textarea v-model="guestForm.personality" rows="2" placeholder="热情、理性的观察者..."></textarea>
+                          <textarea v-model="guestForm.personality" rows="5" placeholder="热情、理性的观察者..."></textarea>
                         </div>
                         <div class="form-group">
                           <label>主持/对话风格</label>
-                          <textarea v-model="guestForm.speaking_style" rows="2" placeholder="语速、口癖、提问倾向..."></textarea>
+                          <textarea v-model="guestForm.speaking_style" rows="5" placeholder="语速、口癖、提问倾向..."></textarea>
                         </div>
                         <div class="form-group">
                           <label>核心背景经历</label>
-                          <textarea v-model="guestForm.background" rows="2"></textarea>
+                          <textarea v-model="guestForm.background" rows="5"></textarea>
                         </div>
                       </div>
                       <div class="form-actions">
@@ -255,7 +255,7 @@
                         </div>
                         <div class="form-group">
                           <label>核心描述</label>
-                          <textarea v-model="guestForm.personality" rows="3" placeholder="性格特点、背景经历..."></textarea>
+                          <textarea v-model="guestForm.personality" rows="6" placeholder="性格特点、背景经历..."></textarea>
                         </div>
                       </div>
                       <div class="form-actions">
@@ -295,7 +295,7 @@
                   <!-- AI Generation Panel -->
                   <div class="ai-gen-container">
                     <div class="ai-gen-badge">✨ AI 智能创作嘉宾</div>
-                    <textarea v-model="aiDescription" class="ai-gen-textarea" placeholder="例：一位30岁的女性科幻作家，充满想象力..." rows="2"></textarea>
+                    <textarea v-model="aiDescription" class="ai-gen-textarea" placeholder="例：一位30岁的女性科幻作家，充满想象力..." rows="4"></textarea>
                     
                     <button class="btn-ai-gen-pill" :disabled="generatingGuest || !aiDescription.trim()" @click="generateGuestFromAI">
                       <span v-if="generatingGuest" class="spinner orange"></span>
@@ -957,6 +957,11 @@ function getAvatarGradient(mbti) {
   width: 100%;
 }
 
+.form-group textarea {
+  min-height: 80px;
+  resize: vertical;
+}
+
 .form-group input:focus,
 .form-group textarea:focus {
   outline: none;
@@ -1019,7 +1024,7 @@ function getAvatarGradient(mbti) {
   top: 0;
   right: 0;
   width: 100%;
-  max-width: 440px;
+  max-width: 540px;
   height: 100%;
   background: var(--c-bg);
   box-shadow: -10px 0 40px rgba(0,0,0,0.15);

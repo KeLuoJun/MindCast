@@ -17,7 +17,7 @@
               <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
               <polyline points="9,22 9,12 15,12 15,22"/>
             </svg>
-            工作台
+            首页
           </a>
           <button class="nav-settings-btn" @click="settingsPanelOpen = true" title="系统配置">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">

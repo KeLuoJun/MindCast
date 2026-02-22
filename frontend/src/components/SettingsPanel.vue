@@ -341,7 +341,7 @@ watch(() => props.modelValue, (val) => {
   top: 0;
   right: 0;
   bottom: 0;
-  width: 520px;
+  width: 440px;
   max-width: 100%;
   background: linear-gradient(180deg, var(--c-bg) 0%, var(--c-bg-warm) 100%);
   z-index: 1001;
