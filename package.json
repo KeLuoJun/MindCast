@@ -1,7 +1,7 @@
 {
     "name": "mindcast",
     "version": "0.1.0",
-    "description": "MindCast — 多智能体 AI 播客生成器",
+    "description": "MindCast — 多智能体 AI 播客系统",
     "scripts": {
         "setup": "npm install && cd frontend && npm install",
         "setup:backend": "uv sync",
