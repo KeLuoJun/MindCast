@@ -601,7 +601,11 @@ async function saveGuest() {
         throw new Error('保存主持資料失败')
       }
     } else {
-      emit('save', { ...payload, isEdit: !!editingGuest.value })
+      emit('save', {
+        ...payload,
+        isEdit: !!editingGuest.value,
+        originalName: editingGuest.value || undefined
+      })
     }
     resetState()
   } catch (e) {

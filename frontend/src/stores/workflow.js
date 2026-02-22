@@ -94,11 +94,12 @@ export const useWorkflowStore = defineStore('workflow', () => {
     }
   }
 
-  async function saveGuest({ isEdit, ...payload }) {
+  async function saveGuest({ isEdit, originalName, ...payload }) {
     try {
       const method = isEdit ? 'PUT' : 'POST'
+      const targetName = isEdit ? (originalName || payload.name) : payload.name
       const url = isEdit
-        ? `/api/guests/${encodeURIComponent(payload.name)}`
+        ? `/api/guests/${encodeURIComponent(targetName)}`
         : '/api/guests'
       const res = await fetch(url, {
         method,
@@ -111,7 +112,13 @@ export const useWorkflowStore = defineStore('workflow', () => {
       }
       const data = await res.json()
       guests.value = data
-      if (!selectedGuests.value.includes(payload.name) && selectedGuests.value.length < maxGuests) {
+      if (isEdit) {
+        if (originalName && originalName !== payload.name) {
+          selectedGuests.value = selectedGuests.value.map((name) =>
+            name === originalName ? payload.name : name
+          )
+        }
+      } else if (!selectedGuests.value.includes(payload.name) && selectedGuests.value.length < maxGuests) {
         selectedGuests.value = [...selectedGuests.value, payload.name]
       }
     } catch (e) {
