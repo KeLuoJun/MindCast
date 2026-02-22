@@ -4,11 +4,7 @@
       <div class="header-content">
         <router-link to="/" class="logo">
           <div class="logo-icon">
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5">
-              <path d="M12 2a3 3 0 00-3 3v7a3 3 0 006 0V5a3 3 0 00-3-3z" fill="currentColor" stroke="none"/>
-              <path d="M19 10v2a7 7 0 01-14 0v-2"/>
-              <line x1="12" y1="19" x2="12" y2="22"/>
-            </svg>
+            <img src="/logo.svg" alt="MindCast Logo" width="24" height="24" />
           </div>
           <div class="logo-text">
             <span class="logo-name">MindCast</span>
