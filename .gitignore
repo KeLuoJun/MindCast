@@ -1,25 +1,27 @@
-# Python-generated files
+# Python
 __pycache__/
 *.py[oc]
 build/
 dist/
 wheels/
 *.egg-info
+.venv/
 
-# Virtual environments
-.venv
-
-# Environment variables
+# Environment
 .env
 
-# Output files
-output/episodes/*.mp3
+# Output / generated files
 output/episodes/*.json
-output/test_*.mp3
+output/episodes/*.wav
+output/episodes/*.mp3
 output/episodes/segments/
+output/episodes/logs/
+output/test_*.mp3
+
+# Data stores
+data/chromadb/
 
 # Node.js
-frontend/node_modules/
 node_modules/
 frontend/dist/
 
@@ -28,15 +30,4 @@ frontend/dist/
 .vscode/
 *.swp
 *.swo
-
-data/chromadb
-output/episodes/logs/
 *.log
-__pycache__/
-.venv/
-.env
-.vscode/
-output/episodes/*.json
-output/episodes/*.wav
-output/episodes/*.mp3
-output/episodes/segments/*
