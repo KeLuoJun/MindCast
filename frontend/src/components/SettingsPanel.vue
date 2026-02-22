@@ -49,18 +49,27 @@
                   <label>API Key</label>
                   <div class="key-input-wrap">
                     <input
+                      v-if="showKeys.llm && revealedKeys.llm_api_key"
+                      :value="revealedKeys.llm_api_key"
+                      type="text"
+                      class="key-input"
+                      readonly
+                    />
+                    <input
+                      v-else
                       v-model="form.llm_api_key"
-                      :type="showKeys.llm ? 'text' : 'password'"
-                      placeholder="设置新 Key (留空保持不变)"
+                      type="password"
+                      :placeholder="isMasked(originals.llm_api_key) ? '已配置（输入新值可更新）' : '输入 API Key'"
                       class="key-input"
                       autocomplete="new-password"
                     />
-                    <button class="btn-eye" @click="showKeys.llm = !showKeys.llm" title="显示/隐藏">
+                    <button class="btn-eye" @click="toggleKeyVisibility('llm')" title="显示/隐藏">
                       <svg v-if="showKeys.llm" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
                       <svg v-else viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                     </button>
                   </div>
-                  <span v-if="isMasked(originals.llm_api_key)" class="field-hint">已设置 (输入新值可更新)</span>
+                  <span v-if="isMasked(originals.llm_api_key)" class="field-hint">✓ 已配置</span>
+                  <span v-else class="field-hint field-hint--warning">⚠ 未配置</span>
                 </div>
                 <div class="field">
                   <label>模型名称</label>
@@ -86,18 +95,27 @@
                   <label>API Key</label>
                   <div class="key-input-wrap">
                     <input
+                      v-if="showKeys.tavily && revealedKeys.tavily_api_key"
+                      :value="revealedKeys.tavily_api_key"
+                      type="text"
+                      class="key-input"
+                      readonly
+                    />
+                    <input
+                      v-else
                       v-model="form.tavily_api_key"
-                      :type="showKeys.tavily ? 'text' : 'password'"
-                      placeholder="设置新 Key (留空保持不变)"
+                      type="password"
+                      :placeholder="isMasked(originals.tavily_api_key) ? '已配置（输入新值可更新）' : '输入 API Key'"
                       class="key-input"
                       autocomplete="new-password"
                     />
-                    <button class="btn-eye" @click="showKeys.tavily = !showKeys.tavily" title="显示/隐藏">
+                    <button class="btn-eye" @click="toggleKeyVisibility('tavily')" title="显示/隐藏">
                       <svg v-if="showKeys.tavily" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
                       <svg v-else viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                     </button>
                   </div>
-                  <span v-if="isMasked(originals.tavily_api_key)" class="field-hint">已设置 (输入新值可更新)</span>
+                  <span v-if="isMasked(originals.tavily_api_key)" class="field-hint">✓ 已配置</span>
+                  <span v-else class="field-hint field-hint--warning">⚠ 未配置</span>
                 </div>
               </div>
             </div>
@@ -119,18 +137,27 @@
                   <label>API Key</label>
                   <div class="key-input-wrap">
                     <input
+                      v-if="showKeys.minimax && revealedKeys.minimax_api_key"
+                      :value="revealedKeys.minimax_api_key"
+                      type="text"
+                      class="key-input"
+                      readonly
+                    />
+                    <input
+                      v-else
                       v-model="form.minimax_api_key"
-                      :type="showKeys.minimax ? 'text' : 'password'"
-                      placeholder="设置新 Key (留空保持不变)"
+                      type="password"
+                      :placeholder="isMasked(originals.minimax_api_key) ? '已配置（输入新值可更新）' : '输入 API Key'"
                       class="key-input"
                       autocomplete="new-password"
                     />
-                    <button class="btn-eye" @click="showKeys.minimax = !showKeys.minimax" title="显示/隐藏">
+                    <button class="btn-eye" @click="toggleKeyVisibility('minimax')" title="显示/隐藏">
                       <svg v-if="showKeys.minimax" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
                       <svg v-else viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                     </button>
                   </div>
-                  <span v-if="isMasked(originals.minimax_api_key)" class="field-hint">已设置 (输入新值可更新)</span>
+                  <span v-if="isMasked(originals.minimax_api_key)" class="field-hint">✓ 已配置</span>
+                  <span v-else class="field-hint field-hint--warning">⚠ 未配置</span>
                 </div>
                 <div class="field">
                   <label>TTS 模型</label>
@@ -198,9 +225,10 @@ const form = ref({
 })
 
 const showKeys = ref({ llm: false, tavily: false, minimax: false })
+const revealedKeys = ref({ llm_api_key: '', tavily_api_key: '', minimax_api_key: '' })
 
 function isMasked(val) {
-  return val && val.includes('****')
+  return val && (val.includes('****') || val.includes('•'))
 }
 
 function close() {
@@ -212,6 +240,31 @@ function showToast(text, type = 'success') {
   setTimeout(() => { toast.value.show = false }, 3000)
 }
 
+async function revealKey(keyName) {
+  try {
+    const res = await fetch(`/api/settings/reveal/${keyName}`)
+    if (!res.ok) {
+      const err = await res.json()
+      throw new Error(err?.detail || '获取失败')
+    }
+    const data = await res.json()
+    revealedKeys.value[keyName] = data.value
+  } catch (e) {
+    showToast('无法获取完整的 API Key：' + e.message, 'error')
+  }
+}
+
+async function toggleKeyVisibility(keyType) {
+  if (!showKeys.value[keyType]) {
+    // User wants to show the key, fetch the full value
+    const keyName = `${keyType}_api_key`
+    if (!revealedKeys.value[keyName]) {
+      await revealKey(keyName)
+    }
+  }
+  showKeys.value[keyType] = !showKeys.value[keyType]
+}
+
 async function loadSettings() {
   loading.value = true
   try {
@@ -221,17 +274,13 @@ async function loadSettings() {
     originals.value = { ...data }
     form.value = {
       llm_base_url: data.llm_base_url || '',
-      llm_api_key: data.llm_api_key || '',   // masked value shown as placeholder hint
+      llm_api_key: data.llm_api_key || '',
       llm_model: data.llm_model || '',
       tavily_api_key: data.tavily_api_key || '',
       minimax_api_key: data.minimax_api_key || '',
       minimax_tts_model: data.minimax_tts_model || '',
       minimax_tts_base_url: data.minimax_tts_base_url || '',
     }
-    // Clear key fields so user can type new values; masked values are shown via hint
-    if (isMasked(form.value.llm_api_key)) form.value.llm_api_key = ''
-    if (isMasked(form.value.tavily_api_key)) form.value.tavily_api_key = ''
-    if (isMasked(form.value.minimax_api_key)) form.value.minimax_api_key = ''
   } catch (e) {
     showToast('加载配置失败：' + e.message, 'error')
   } finally {
@@ -544,12 +593,19 @@ watch(() => props.modelValue, (val) => {
 }
 
 .field-hint {
-  font-size: 0.68rem;
-  color: var(--c-text-3);
-  font-style: italic;
+  font-size: 0.7rem;
+  color: #16a34a;
+  font-weight: 600;
   line-height: 1.2;
   word-break: break-all;
-  margin-top: 2px;
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.field-hint--warning {
+  color: #ea580c;
 }
 
 /* ── Notice ── */

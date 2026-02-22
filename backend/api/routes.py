@@ -844,9 +844,27 @@ async def update_settings(patch: AppSettingsPatch):
     return {"status": "ok", "message": "设置已更新，服务配置已重新加载"}
 
 
+@router.get("/settings/reveal/{key_name}")
+async def reveal_api_key(key_name: str):
+    """Return the unmasked API key (e.g., 'llm_api_key', 'tavily_api_key', 'minimax_api_key')."""
+    key_mapping = {
+        "llm_api_key": settings.llm_api_key,
+        "tavily_api_key": settings.tavily_api_key,
+        "minimax_api_key": settings.minimax_api_key,
+    }
+    if key_name not in key_mapping:
+        raise HTTPException(status_code=400, detail="Invalid key name")
+
+    value = key_mapping[key_name]
+    if not value:
+        raise HTTPException(status_code=404, detail="Key not configured")
+
+    return {"value": value}
+
 # ---------------------------------------------------------------------------
 # GET /api/status/{task_id} — SSE progress stream
 # ---------------------------------------------------------------------------
+
 
 @router.get("/status/{task_id}")
 async def task_status(task_id: str):
