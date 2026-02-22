@@ -31,6 +31,7 @@ from backend.services.llm_service import LLMService, get_llm_service
 from backend.services.news_service import NewsService, get_news_service
 from backend.services.run_logger import EpisodeRunLogger
 from backend.services.tts_service import TTSService, get_tts_service
+from backend.services.host_service import get_host_service
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +70,9 @@ class PodcastOrchestrator:
         self._tts = tts or get_tts_service()
         self._audio = audio or audio_service
 
-        self.host = HostAgent(self._llm)
+        host_persona = get_host_service().get_host()
+        self.host = HostAgent(self._llm, persona=host_persona)
+
         # We'll select guest instances per episode run to control guest count
         guest_configs = guest_personas or GUEST_PERSONAS
         self._guest_pool = {p.name: GuestAgent(

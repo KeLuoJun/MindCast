@@ -17,13 +17,14 @@ logger = logging.getLogger(__name__)
 class HostAgent(BaseAgent):
     """The podcast host: selects topics, plans episodes, drives conversation."""
 
-    def __init__(self, llm_service: LLMService) -> None:
+    def __init__(self, llm_service: LLMService, persona: PersonaConfig | None = None) -> None:
+        p = persona or HOST_PERSONA
         super().__init__(
-            name=HOST_PERSONA.name,
-            system_prompt=build_system_prompt(HOST_PERSONA, is_host=True),
+            name=p.name,
+            system_prompt=build_system_prompt(p, is_host=True),
             llm_service=llm_service,
         )
-        self.persona = HOST_PERSONA
+        self.persona = p
 
     # ------------------------------------------------------------------
     # Topic selection
@@ -119,7 +120,8 @@ class HostAgent(BaseAgent):
 
     @staticmethod
     def _topic_tokens(text: str) -> set[str]:
-        raw_tokens = re.findall(r"[\u4e00-\u9fffA-Za-z0-9]+", (text or "").lower())
+        raw_tokens = re.findall(
+            r"[\u4e00-\u9fffA-Za-z0-9]+", (text or "").lower())
         return {t for t in raw_tokens if len(t) >= 2}
 
     @classmethod

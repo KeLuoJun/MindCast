@@ -24,6 +24,127 @@
         <!-- Body -->
         <div class="drawer-body">
           <div class="guest-list">
+            <!-- Host Configuration (Sticky Top) -->
+            <div v-if="hostPersona" class="guest-card-wrapper host-section">
+              <div class="section-divider"><span>主持人</span></div>
+              <div
+                class="guest-card host-card"
+                :class="{ 'guest-card--expanded': expandedBadge === 'HOST' }"
+                @click="expandedBadge = expandedBadge === 'HOST' ? null : 'HOST'"
+              >
+                <div class="avatar-container">
+                  <div class="guest-avatar host-avatar">
+                   {{ hostPersona.name.charAt(0) }}
+                  </div>
+                  <div class="host-badge">HOST</div>
+                </div>
+                <div class="guest-card-content">
+                  <div class="guest-card-header">
+                    <span class="guest-name">{{ hostPersona.name }}</span>
+                    <div class="expand-chevron">
+                      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <polyline points="6,9 12,15 18,9"/>
+                      </svg>
+                    </div>
+                  </div>
+                  <div class="guest-role">{{ hostPersona.occupation }}</div>
+                  <div class="guest-tags">
+                    <span class="tag-pill tag-pill--mbti">{{ hostPersona.mbti }}</span>
+                    <span class="tag-pill tag-pill--count">{{ hostPersona.gender === 'male' ? '男' : '女' }} · {{ hostPersona.age }}岁</span>
+                  </div>
+                </div>
+              </div>
+
+              <transition name="expand">
+                <div v-if="expandedBadge === 'HOST'" class="card-drawer-extension">
+                  <div class="action-bar">
+                    <button class="btn-icon-label" @click.stop="startEditHost">
+                      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                      编辑主持资料
+                    </button>
+                  </div>
+                  <div class="extension-content">
+                    <div v-if="editingHost" class="edit-form host-edit-form">
+                      <div class="form-body">
+                        <div class="form-row">
+                          <div class="form-group">
+                            <label>名称 *</label>
+                            <input v-model="guestForm.name" type="text" />
+                          </div>
+                          <div class="form-group">
+                            <label>MBTI</label>
+                            <select v-model="guestForm.mbti">
+                              <option value="">请选择 MBTI</option>
+                              <option v-for="type in mbtiOptions" :key="type" :value="type">{{ type }}</option>
+                            </select>
+                          </div>
+                        </div>
+                        <div class="form-row">
+                          <div class="form-group">
+                            <label>职业</label>
+                            <input v-model="guestForm.occupation" type="text" />
+                          </div>
+                          <div class="form-group small">
+                            <label>性别</label>
+                            <select v-model="guestForm.gender">
+                              <option value="male">男</option>
+                              <option value="female">女</option>
+                            </select>
+                          </div>
+                          <div class="form-group small">
+                            <label>年龄</label>
+                            <input v-model.number="guestForm.age" type="number" />
+                          </div>
+                        </div>
+                        <div class="form-group">
+                          <label class="voice-label">音色ID</label>
+                          <div class="form-row">
+                            <input v-model="guestForm.voice_id" type="text" />
+                            <button class="btn-icon-label" style="flex: 0 0 auto;" @click="showVoicePicker = !showVoicePicker">列表</button>
+                          </div>
+                          <transition name="expand">
+                            <div v-if="showVoicePicker" class="voice-picker">
+                              <div class="voice-header">内置音色</div>
+                              <div class="voice-options">
+                                <button v-for="v in voicesForCurrentGender" :key="v" 
+                                  class="voice-option" 
+                                  :class="{ 'voice-option--active': guestForm.voice_id === v }"
+                                  @click="selectBuiltinVoice(v)">
+                                  {{ v }}
+                                </button>
+                              </div>
+                            </div>
+                          </transition>
+                        </div>
+                        <div class="form-group">
+                          <label>性格与主持效果描述</label>
+                          <textarea v-model="guestForm.personality" rows="2" placeholder="热情、理性的观察者..."></textarea>
+                        </div>
+                        <div class="form-group">
+                          <label>主持/对话风格</label>
+                          <textarea v-model="guestForm.speaking_style" rows="2" placeholder="语速、口癖、提问倾向..."></textarea>
+                        </div>
+                        <div class="form-group">
+                          <label>核心背景经历</label>
+                          <textarea v-model="guestForm.background" rows="2"></textarea>
+                        </div>
+                      </div>
+                      <div class="form-actions">
+                        <button class="btn-cancel" @click="editingHost = false">取消</button>
+                        <button class="btn-save" :disabled="savingGuest" @click="saveGuest">保存主持配置</button>
+                      </div>
+                    </div>
+                    <div v-else class="guest-bio-box">
+                      <span class="bio-label">主持风格 & 背景</span>
+                      <p class="bio-text">{{ hostPersona.personality }}</p>
+                    </div>
+                  </div>
+                </div>
+              </transition>
+            </div>
+
+            <div class="section-divider"><span>常驻嘉宾</span></div>
+
             <!-- Guest Profile Cards -->
             <div
               v-for="guest in guests"
@@ -89,7 +210,10 @@
                           </div>
                           <div class="form-group">
                             <label>MBTI</label>
-                            <input v-model="guestForm.mbti" type="text" placeholder="如 INTJ" />
+                            <select v-model="guestForm.mbti">
+                              <option value="">请选择 MBTI</option>
+                              <option v-for="type in mbtiOptions" :key="type" :value="type">{{ type }}</option>
+                            </select>
                           </div>
                         </div>
                         <div class="form-row">
@@ -169,12 +293,15 @@
               <transition name="expand">
                 <div v-if="addingGuest" class="card-drawer-extension">
                   <!-- AI Generation Panel -->
-                  <div class="ai-gen-panel">
+                  <div class="ai-gen-container">
                     <div class="ai-gen-badge">✨ AI 智能创作嘉宾</div>
                     <textarea v-model="aiDescription" class="ai-gen-textarea" placeholder="例：一位30岁的女性科幻作家，充满想象力..." rows="2"></textarea>
-                    <button class="btn-ai-gen" :disabled="generatingGuest || !aiDescription.trim()" @click="generateGuestFromAI">
+                    
+                    <button class="btn-ai-gen-pill" :disabled="generatingGuest || !aiDescription.trim()" @click="generateGuestFromAI">
+                      <span v-if="generatingGuest" class="spinner orange"></span>
                       {{ generatingGuest ? '正在创作中...' : 'AI 辅助补全资料' }}
                     </button>
+                    
                     <div class="ai-gen-divider"><span>或手动填写</span></div>
                   </div>
 
@@ -187,10 +314,10 @@
                         </div>
                         <div class="form-group">
                           <label>MBTI</label>
-                          <input v-model="guestForm.mbti" type="text" />
+                          <input v-model="guestForm.mbti" type="text" placeholder="如 INTJ" />
                         </div>
                       </div>
-                      <!-- More fields can go here... -->
+                      <!-- More fields... -->
                     </div>
                     <div class="form-actions">
                       <button class="btn-cancel" @click="cancelAdd">取消</button>
@@ -243,11 +370,22 @@ const emit = defineEmits(['update:modelValue', 'save', 'remove', 'update:selecte
 
 const savingGuest = ref(false)
 const editingGuest = ref(null)
+const editingHost = ref(false)
 const addingGuest = ref(false)
 const expandedBadge = ref(null)
 
+const hostPersona = ref(null)
+
 // In-page confirm dialog
 const confirmDialog = ref({ show: false, name: '' })
+
+const mbtiOptions = [
+  'INTJ', 'INTP', 'ENTJ', 'ENTP',
+  'INFJ', 'INFP', 'ENFJ', 'ENFP',
+  'ISTJ', 'ISFJ', 'ESTJ', 'ESFJ',
+  'ISTP', 'ISFP', 'ESTP', 'ESFP'
+]
+
 function askRemoveGuest(name) {
   confirmDialog.value = { show: true, name }
 }
@@ -297,6 +435,15 @@ async function fetchVoiceLibrary() {
   }
 }
 
+async function fetchHost() {
+  try {
+    const res = await fetch('/api/host')
+    if (res.ok) hostPersona.value = await res.json()
+  } catch (e) {
+    console.warn('Failed to fetch host persona:', e)
+  }
+}
+
 async function generateGuestFromAI() {
   if (!aiDescription.value.trim()) return
   generatingGuest.value = true
@@ -335,7 +482,10 @@ function selectBuiltinVoice(voiceId) {
   showVoicePicker.value = false
 }
 
-onMounted(() => fetchVoiceLibrary())
+onMounted(() => {
+  fetchHost()
+  fetchVoiceLibrary()
+})
 
 watch(() => props.modelValue, (val) => {
   if (val) {
@@ -370,7 +520,8 @@ function toggleExpand(name) {
 
 function startEdit(guest) {
   editingGuest.value = guest.name
-  expandedBadge.value = null
+  editingHost.value = false
+  // expandedBadge.value = null // Fix: don't close the extension when editing
   showVoicePicker.value = false
   guestForm.value = {
     name: guest.name,
@@ -386,8 +537,30 @@ function startEdit(guest) {
   }
 }
 
+function startEditHost() {
+  editingHost.value = true
+  editingGuest.value = null
+  expandedBadge.value = 'HOST'
+  showVoicePicker.value = false
+  const host = hostPersona.value
+  guestForm.value = {
+    name: host.name,
+    gender: host.gender,
+    age: host.age,
+    mbti: host.mbti,
+    personality: host.personality,
+    occupation: host.occupation,
+    speaking_style: host.speaking_style,
+    stance_bias: host.stance_bias || '',
+    voice_id: host.voice_id || '',
+    background: host.background
+  }
+}
+
 function cancelEdit() {
   editingGuest.value = null
+  editingHost.value = false
+  expandedBadge.value = null
 }
 
 function startAdd() {
@@ -415,8 +588,24 @@ async function saveGuest() {
       background: (guestForm.value.background || '').trim(),
       voice_id: (guestForm.value.voice_id || '').trim()
     }
-    emit('save', { ...payload, isEdit: !!editingGuest.value })
+
+    if (editingHost.value) {
+      const res = await fetch('/api/host', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+      if (res.ok) {
+        hostPersona.value = await res.json()
+      } else {
+        throw new Error('保存主持資料失败')
+      }
+    } else {
+      emit('save', { ...payload, isEdit: !!editingGuest.value })
+    }
     resetState()
+  } catch (e) {
+    alert(e.message)
   } finally {
     savingGuest.value = false
   }
@@ -896,72 +1085,192 @@ function getAvatarGradient(mbti) {
 .expand-enter-active, .expand-leave-active { transition: all 0.3s ease; }
 .expand-enter-from, .expand-leave-to { opacity: 0; transform: translateY(-10px); }
 
-/* Reuse AI/Voice styles from previous or standard */
-.ai-gen-panel {
-  margin-bottom: 2rem;
-  background: linear-gradient(135deg, white 0%, var(--c-primary-soft) 100%);
-  border-radius: var(--r-xl);
-  padding: 1.5rem;
-  border: 2px solid var(--c-border);
+/* ─── AI/Voice styles ─────────────────────────────── */
+.ai-gen-container {
+  margin: 1.25rem 1rem 0.5rem;
+  background: #fffcfb;
+  border: 1.5px solid #ffefe8;
+  border-radius: 1.25rem;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
 }
 
 .ai-gen-badge {
   display: inline-flex;
+  align-items: center;
   gap: 6px;
-  padding: 6px 14px;
+  padding: 5px 12px;
   background: var(--c-primary);
   color: white;
-  border-radius: var(--r-full);
+  border-radius: 10px;
   font-size: 0.75rem;
   font-weight: 800;
-  margin-bottom: 1rem;
+  width: fit-content;
 }
 
-.btn-ai-gen {
-  width: 100%;
-  padding: 12px;
+.ai-gen-textarea {
+  border: 1px solid var(--c-border);
+  border-radius: 10px;
+  padding: 10px;
+  font-size: 0.85rem;
   background: white;
-  border: 2px solid var(--c-primary);
-  color: var(--c-primary);
-  border-radius: var(--r-lg);
-  font-weight: 700;
-  cursor: pointer;
+  resize: none;
+  width: 100%;
 }
 
-.btn-ai-gen:hover {
+.ai-gen-textarea:focus {
+  outline: none;
+  border-color: var(--c-primary-soft);
+}
+
+.btn-ai-gen-pill {
+  width: 100%;
+  padding: 10px;
+  background: white;
+  border: 1.5px solid var(--c-primary);
+  color: var(--c-primary);
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 0.9rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.2s;
+}
+
+.btn-ai-gen-pill:hover:not(:disabled) {
+  background: var(--c-primary-soft);
+  transform: translateY(-1px);
+}
+
+.btn-ai-gen-pill:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ai-gen-divider {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  color: var(--c-text-3);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.ai-gen-divider::before,
+.ai-gen-divider::after {
+  content: '';
+  flex: 1;
+  border-bottom: 1px solid var(--c-border);
+}
+
+.ai-gen-divider span {
+  padding: 0 10px;
+}
+
+/* ─── Section Divider ────────────────────────────────── */
+.section-divider {
+  display: flex;
+  align-items: center;
+  margin: 1.5rem 0.5rem 0.5rem;
+  color: var(--c-text-3);
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.section-divider::after {
+  content: '';
+  flex: 1;
+  margin-left: 10px;
+  height: 1px;
+  background: var(--c-border);
+}
+
+/* ─── Host Specific ─────────────────────────────────── */
+.host-avatar {
+  background: linear-gradient(135deg, #fb923c 0%, #ea580c 100%) !important;
+  border: 2px solid white;
+}
+
+.host-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
   background: var(--c-primary);
   color: white;
+  font-size: 0.55rem;
+  font-weight: 900;
+  padding: 2px 4px;
+  border-radius: 4px;
+  border: 2px solid var(--c-surface);
+}
+
+.host-card {
+  border-style: solid;
+  border-width: 2px;
+  border-color: #ffefe8;
+  background: #fffcfb;
+}
+
+.host-card:hover { border-color: var(--c-primary-soft); }
+
+.spinner.orange {
+  border: 2px solid rgba(255,107,53, 0.2);
+  border-top-color: var(--c-primary);
 }
 
 .voice-picker {
   margin-top: 0.75rem;
-  background: var(--c-surface);
-  border: 1.5px solid var(--c-border);
-  border-radius: var(--r-md);
+  background: white;
+  border: 1.5px solid var(--c-primary-soft);
+  border-radius: var(--r-xl);
   overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.06);
 }
 
 .voice-options {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
+  flex-direction: column;
   gap: 0.5rem;
   padding: 0.75rem;
+  max-height: 240px;
+  overflow-y: auto;
 }
 
 .voice-option {
-  padding: 8px;
+  padding: 10px 12px;
   background: var(--c-bg);
-  border: 1px solid var(--c-border);
-  border-radius: 6px;
-  font-size: 0.8rem;
-  text-align: center;
+  border: 1.5px solid var(--c-border);
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  text-align: left;
   cursor: pointer;
+  transition: all 0.2s;
+  color: var(--c-text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.voice-option:hover {
+  border-color: var(--c-primary-soft);
+  background: white;
+  color: var(--c-primary);
 }
 
 .voice-option--active {
-  background: var(--c-primary-soft);
+  background: #fffafa;
   color: var(--c-primary);
   border-color: var(--c-primary);
+  font-weight: 700;
+  box-shadow: 0 2px 8px rgba(255,107,53,0.1);
 }
 
 .voice-header {

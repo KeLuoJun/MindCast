@@ -38,6 +38,7 @@ from backend.models import DetailedInfo, DialogueLine, Episode
 from backend.services.run_logger import EpisodeRunLogger
 from backend.services.news_service import get_news_service
 from backend.services.guest_pool_service import get_guest_pool_service, to_persona_config
+from backend.services.host_service import get_host_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api")
@@ -661,6 +662,27 @@ async def delete_guest(guest_name: str):
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return [GuestProfileOut(**item.model_dump(mode="json")) for item in guests]
+
+
+# ---------------------------------------------------------------------------
+# Host Persona Management
+# ---------------------------------------------------------------------------
+
+@router.get("/host", response_model=GuestProfileOut)
+async def get_host_profile():
+    """Get the persistent host persona."""
+    service = get_host_service()
+    host = service.get_host()
+    return GuestProfileOut(**host.model_dump(mode="json"))
+
+
+@router.put("/host", response_model=GuestProfileOut)
+async def update_host_profile(payload: GuestProfileIn):
+    """Update the host persona."""
+    service = get_host_service()
+    updated = to_persona_config(payload.model_dump())
+    host = service.save_host(updated)
+    return GuestProfileOut(**host.model_dump(mode="json"))
 
 
 # ---------------------------------------------------------------------------
