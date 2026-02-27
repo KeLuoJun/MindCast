@@ -88,7 +88,7 @@
             </svg>
           </div>
           <span class="step-label">{{ stage.label }}</span>
-          <div v-if="idx < stages.length - 1" class="step-line" :class="{ filled: getStageClass(stage.key) === 'completed' }"></div>
+          <div v-if="idx < stages.length - 1" class="step-line" :class="{ filled: getStageClass(stage.key) === 'completed', animating: getStageClass(stage.key) === 'active' }"></div>
         </div>
       </div>
 
@@ -141,16 +141,29 @@ const emit = defineEmits(['completed'])
 
 const store = useWorkflowStore()
 
-const stages = [
-  { key: 'news', label: '获取资讯' },
-  { key: 'topic', label: '选定话题' },
-  { key: 'research', label: '深度搜索' },
-  { key: 'planning', label: '节目策划' },
-  { key: 'dialogue', label: '生成文本' },
-  { key: 'article', label: '撰写文章' },
-  { key: 'audio', label: '音频拼接' },
-  { key: 'done', label: '完成' },
-]
+const stages = computed(() => {
+  if (store.inputMode === 'document') {
+    return [
+      { key: 'documents', label: '解析文档' },
+      { key: 'research',  label: '深度研究' },
+      { key: 'planning',  label: '节目策划' },
+      { key: 'dialogue',  label: '生成对话' },
+      { key: 'article',   label: '撰写文章' },
+      { key: 'audio',     label: '音频拼接' },
+      { key: 'done',      label: '完成' },
+    ]
+  }
+  return [
+    { key: 'news',     label: '获取资讯' },
+    { key: 'topic',    label: '选定话题' },
+    { key: 'research', label: '深度研究' },
+    { key: 'planning', label: '节目策划' },
+    { key: 'dialogue', label: '生成对话' },
+    { key: 'article',  label: '撰写文章' },
+    { key: 'audio',    label: '音频拼接' },
+    { key: 'done',     label: '完成' },
+  ]
+})
 
 const currentStage = ref('')
 const detail = ref('')
@@ -167,12 +180,12 @@ const selectedGuestObjects = computed(() => {
 
 const currentStageLabel = computed(() => {
   if (currentStage.value === 'cancelled') return '已终止'
-  const stage = stages.find(s => s.key === currentStage.value)
+  const stage = stages.value.find(s => s.key === currentStage.value)
   return stage ? stage.label : ''
 })
 
 function getStageClass(key) {
-  const stageKeys = stages.map(s => s.key)
+  const stageKeys = stages.value.map(s => s.key)
   const currentIdx = stageKeys.indexOf(currentStage.value)
   const itemIdx = stageKeys.indexOf(key)
   if (itemIdx < currentIdx) return 'completed'
@@ -641,11 +654,27 @@ onUnmounted(() => {
   width: 90%;
   height: 2px;
   background: var(--c-border);
+  overflow: hidden;
   z-index: 1;
 }
 
 .step-line.filled {
   background: var(--c-success);
+}
+
+.step-line.animating {
+  background: color-mix(in srgb, var(--c-primary) 30%, var(--c-border));
+}
+.step-line.animating::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255,107,53,0.75) 50%, transparent 100%);
+  animation: stepShimmer 1.2s ease-in-out infinite;
+}
+@keyframes stepShimmer {
+  0%   { transform: translateX(-150%); }
+  100% { transform: translateX(150%); }
 }
 
 /*  Status Bar  */
