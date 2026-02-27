@@ -10,12 +10,22 @@ export const useWorkflowStore = defineStore('workflow', () => {
   // ── Step / wizard ──
   const currentStep = ref(0)
 
+  // ── Input mode ──
+  const inputMode = ref('topic')        // 'topic' | 'document'
+
   // ── News ──
   const topicQuery = ref('')
   const newsContent = ref(null)          // { count, items }
   const selectedTopic = ref('')
   const customTopic = ref('')
   const fetchingNews = ref(false)
+
+  // ── Document mode ──
+  const documentFiles = ref([])          // File[] selected by user
+  const documentSessionId = ref(null)   // returned by /api/documents/upload
+  const userPrompt = ref('')             // user brief / instructions
+  const uploadingDocs = ref(false)
+  const uploadError = ref('')
 
   // ── Guests ──
   const guests = ref([])
@@ -50,11 +60,15 @@ export const useWorkflowStore = defineStore('workflow', () => {
   // ── Computed ──
   const hasNews = computed(() => newsContent.value !== null)
   const effectiveTopic = computed(() => customTopic.value || selectedTopic.value || '')
+  const hasDocuments = computed(() => !!documentSessionId.value)
   const hasScriptDraft = computed(() => scriptDraft.value && scriptDraft.value.dialogue?.length > 0)
   const hasAudioAdjustDraft = computed(() => audioAdjustEpisodeId.value && audioAdjustLines.value.length > 0)
-  const canGenerate = computed(
-    () => hasNews.value && !!effectiveTopic.value && selectedGuests.value.length > 0
-  )
+  const canGenerate = computed(() => {
+    if (inputMode.value === 'document') {
+      return hasDocuments.value && selectedGuests.value.length > 0
+    }
+    return hasNews.value && !!effectiveTopic.value && selectedGuests.value.length > 0
+  })
 
   // ── Actions ──
   async function fetchNews() {
@@ -165,13 +179,16 @@ export const useWorkflowStore = defineStore('workflow', () => {
     audioAdjustLines.value = []
     pendingAudioRetime.value = false
     try {
+      const body = {
+        topic: inputMode.value === 'document' ? '' : effectiveTopic.value,
+        selected_guests: selectedGuests.value,
+        document_session_id: inputMode.value === 'document' ? documentSessionId.value : null,
+        user_prompt: inputMode.value === 'document' ? userPrompt.value : '',
+      }
       const res = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          topic: effectiveTopic.value,
-          selected_guests: selectedGuests.value
-        })
+        body: JSON.stringify(body)
       })
       const data = await res.json()
       taskId.value = data.task_id
@@ -184,8 +201,8 @@ export const useWorkflowStore = defineStore('workflow', () => {
   async function generateScriptPreview() {
     if (!canGenerate.value) return
     generatingScript.value = true
-    previewStage.value = 'news'
-    previewStageDetail.value = '正在获取资讯...'
+    previewStage.value = inputMode.value === 'document' ? 'documents' : 'news'
+    previewStageDetail.value = inputMode.value === 'document' ? '正在分析文档...' : '正在获取资讯...'
     previewTaskId.value = null
     scriptDraft.value = null
     audioAdjustEpisodeId.value = null
@@ -199,13 +216,21 @@ export const useWorkflowStore = defineStore('workflow', () => {
     }
 
     try {
+      const body = inputMode.value === 'document'
+        ? {
+            topic: '',
+            selected_guests: selectedGuests.value,
+            document_session_id: documentSessionId.value,
+            user_prompt: userPrompt.value,
+          }
+        : {
+            topic: effectiveTopic.value,
+            selected_guests: selectedGuests.value,
+          }
       const res = await fetch('/api/script/preview/task', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          topic: effectiveTopic.value,
-          selected_guests: selectedGuests.value
-        })
+        body: JSON.stringify(body)
       })
       const data = await res.json()
       const taskId = data.task_id
@@ -216,8 +241,11 @@ export const useWorkflowStore = defineStore('workflow', () => {
       _previewEventSource.onmessage = (event) => {
         try {
           const evt = JSON.parse(event.data)
-          previewStage.value = evt.stage || ''
-          previewStageDetail.value = evt.detail || ''
+          // Don't update stage if it's already 'completed' to prevent flicker/reset
+          if (previewStage.value !== '__all_done__') {
+            previewStage.value = evt.stage || ''
+            previewStageDetail.value = evt.detail || ''
+          }
           if (evt.status === 'completed' && evt.result) {
             scriptDraft.value = {
               title: evt.result.title || '',
@@ -230,6 +258,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
                 emotion: line.emotion || 'neutral'
               }))
             }
+            previewStage.value = '__all_done__'
             generatingScript.value = false
             previewTaskId.value = null
             _previewEventSource.close()
@@ -261,6 +290,33 @@ export const useWorkflowStore = defineStore('workflow', () => {
       console.error('Failed to start script preview task:', e)
       generatingScript.value = false
       previewTaskId.value = null
+    }
+  }
+
+  async function uploadDocuments() {
+    if (!documentFiles.value.length) return
+    uploadingDocs.value = true
+    uploadError.value = ''
+    documentSessionId.value = null
+    try {
+      const formData = new FormData()
+      for (const file of documentFiles.value) {
+        formData.append('files', file)
+      }
+      const res = await fetch('/api/documents/upload', {
+        method: 'POST',
+        body: formData
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data?.detail || '上传失败')
+      }
+      documentSessionId.value = data.document_session_id
+    } catch (e) {
+      console.error('Failed to upload documents:', e)
+      uploadError.value = e.message || '上传失败，请重试'
+    } finally {
+      uploadingDocs.value = false
     }
   }
 
@@ -417,10 +473,15 @@ export const useWorkflowStore = defineStore('workflow', () => {
   /** Reset wizard to initial state for a fresh generation run. */
   function resetWizard() {
     currentStep.value = 0
+    inputMode.value = 'topic'
     topicQuery.value = ''
     newsContent.value = null
     selectedTopic.value = ''
     customTopic.value = ''
+    documentFiles.value = []
+    documentSessionId.value = null
+    userPrompt.value = ''
+    uploadError.value = ''
     taskId.value = null
     scriptDraft.value = null
     generating.value = false
@@ -444,11 +505,17 @@ export const useWorkflowStore = defineStore('workflow', () => {
   return {
     // State
     currentStep,
+    inputMode,
     topicQuery,
     newsContent,
     selectedTopic,
     customTopic,
     fetchingNews,
+    documentFiles,
+    documentSessionId,
+    userPrompt,
+    uploadingDocs,
+    uploadError,
     guests,
     selectedGuests,
     maxGuests,
@@ -468,6 +535,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     // Computed
     hasNews,
     effectiveTopic,
+    hasDocuments,
     hasScriptDraft,
     hasAudioAdjustDraft,
     canGenerate,
@@ -484,6 +552,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     removeGuest,
     selectTopic,
     toggleGuest,
+    uploadDocuments,
     startGenerate,
     generateScriptPreview,
     cancelScriptPreview,
