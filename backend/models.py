@@ -163,6 +163,11 @@ class Episode(BaseModel):
     duration_seconds: float | None = None
     word_count: int = 0
     article: str = ""  # High-quality long-form article generated after episode
+    # --- Document mode ---
+    # Set when generated from uploaded documents
+    document_session_id: str | None = None
+    # User-supplied prompt / brief for document mode
+    user_prompt: str = ""
 
     def save_json(self, output_dir: Path) -> Path:
         """Persist episode metadata as JSON."""
