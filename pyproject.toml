@@ -17,6 +17,10 @@ dependencies = [
     "pydantic-settings>=2.5.0",
     "sse-starlette>=2.0.0",
     "chromadb>=0.5.0",
+    "pypdf>=4.0.0",
+    "python-docx>=1.1.0",
+    "python-multipart>=0.0.9",
+    "grpcio!=1.78.1",
 ]
 
 [project.optional-dependencies]

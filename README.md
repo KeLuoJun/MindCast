@@ -40,6 +40,7 @@
 |:---|:---|
 | 🤖 **多智能体全自动生成** | LangGraph 10 节点流水线：资讯 → 选题 → 研究 → 检索 → 规划 → 对话 → 文章 → TTS → 拼装 → 保存 |
 | ✏️ **两阶段创作模式** | ，先生成纯文稿预览编辑，确认后再触发 TTS 合成；或一键全自动端到端 |
+| 📄 **文档驱动模式** | 上传 PDF / DOCX / TXT / Markdown，系统解析后存入 ChromaDB，基于文档内容自动推导话题并生成播客 |
 | 🎙️ **中断机制** | 对话生成时允许激活抢话、接话逻辑，模拟真实播客即兴互动 |
 | 🧠 **RAG 优先研究** | 先查 ChromaDB 知识库，新鲜则跳过联网，陈旧才回退 Tavily 实时搜索 |
 | 📰 **智能去重选题** | 读取近 20 期历史话题，避免重复，保持节目新鲜感 |
@@ -108,6 +109,55 @@
 
 ---
 
+## 📄 文档驱动模式
+
+除话题模式外，MindCast 支持以**上传文档**作为播客内容来源：
+
+```
+用户上传文档 (PDF / DOCX / TXT / Markdown)
+       │
+       ▼
+  解析 & 分块 (800字/块，100字重叠)
+       │
+       ▼
+  存入 ChromaDB (task 作用域，按 session_id 隔离)
+       │
+       ▼
+  LLM 从文档摘要推导播客话题
+       │
+       ▼
+  deep_research (优先查询上传文档 + 全局知识库，不足则 Tavily 补充)
+       │
+       ▼
+  后续同话题模式（规划 → 对话 → 文章 → TTS → 保存）
+```
+
+### 上传文档 API
+
+```http
+POST /api/documents/upload
+Content-Type: multipart/form-data
+
+files: [file1.pdf, file2.docx, ...]   # 最多 20 MB / 文件
+```
+
+**响应：**
+```json
+{
+  "document_session_id": "a1b2c3d4e5f6",
+  "files": [
+    {"filename": "report.pdf", "status": "ok", "chunks": 12, "char_count": 9600}
+  ],
+  "total_chunks": 12
+}
+```
+
+将返回的 `document_session_id` 传入 `/api/generate` 或 `/api/script/preview/task` 即可触发文档模式生成。
+
+> 🔑 **支持格式**：`.pdf`、`.docx`、`.doc`、`.txt`、`.text`、`.md`、`.markdown`（单文件 ≤ 20 MB）
+
+---
+
 ## 🎭 角色人设
 
 | 角色 | 名字 | MBTI | 职业 | 特点 |
@@ -148,6 +198,7 @@ MindCast/
 │   │   ├── tts_service.py    # MiniMax T2A v2 语音合成
 │   │   ├── news_service.py   # Tavily 新闻检索
 │   │   ├── audio_service.py  # pydub + ffmpeg 音频拼装 & 归一化
+│   │   ├── document_service.py   # 文档解析 & ChromaDB 写入（PDF/DOCX/TXT/MD）
 │   │   ├── guest_pool_service.py  # 嘉宾池 CRUD
 │   │   ├── host_service.py   # 主持人配置
 │   │   └── run_logger.py    # 节目结构化日志
