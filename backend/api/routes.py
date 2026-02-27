@@ -8,7 +8,7 @@ import logging
 import random
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, UploadFile, File
 from fastapi.responses import FileResponse, StreamingResponse
 
 from backend.agents.orchestrator import PodcastOrchestrator
@@ -16,6 +16,8 @@ from backend.api.schemas import (
     AppSettingsOut,
     AppSettingsPatch,
     DialogueLineOut,
+    DocumentUploadResponse,
+    DocumentFileInfo,
     EpisodeDetail,
     EpisodeAudioRetimeRequest,
     EpisodeSummary,
@@ -33,12 +35,14 @@ from backend.knowledge import get_knowledge_base
 from backend.knowledge.chroma_kb import (
     BACKGROUND_MATERIAL,
     KNOWLEDGE_SCOPE_GLOBAL,
+    KNOWLEDGE_SCOPE_TASK,
 )
 from backend.models import DetailedInfo, DialogueLine, Episode
 from backend.services.run_logger import EpisodeRunLogger
 from backend.services.news_service import get_news_service
 from backend.services.guest_pool_service import get_guest_pool_service, to_persona_config
 from backend.services.host_service import get_host_service
+from backend.services.document_service import get_document_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api")
@@ -301,28 +305,81 @@ async def script_preview_task(req: ScriptPreviewRequest | None = None):
             active_guests)
 
         try:
-            _tasks[task_id].update({"stage": "news", "detail": "正在获取资讯..."})
-            news_items = await orchestrator._news.get_topic_news(
-                topic=payload.topic, max_results=payload.max_news_results
-            )
-            if not news_items:
-                raise RuntimeError("未获取到相关资讯")
+            if payload.document_session_id:
+                # --- Document mode: derive topic from uploaded docs ---
+                _tasks[task_id].update(
+                    {"stage": "documents", "detail": "正在分析上传的文档内容..."})
 
-            _tasks[task_id].update({"stage": "topic", "detail": "正在分析选定话题..."})
-            if payload.topic.strip():
-                selected_topic = payload.topic.strip()
-                topic = {
-                    "topic": selected_topic,
-                    "reason": "用户手动选择话题",
-                    "search_queries": [
-                        selected_topic,
-                        f"{selected_topic} 最新进展",
-                        f"{selected_topic} 行业争议",
-                    ],
-                }
+                doc_service = get_document_service()
+                doc_summary = await doc_service.get_document_summary(
+                    payload.document_session_id)
+                if not doc_summary:
+                    raise RuntimeError("未能从上传的文档中提取内容，请检查文件格式")
+
+                _tasks[task_id].update(
+                    {"stage": "documents", "detail": "文档内容提取完成，正在生成话题..."})
+                user_prompt_hint = (
+                    f"\n\n用户提示：{payload.user_prompt}" if payload.user_prompt else "")
+                derive_messages = [
+                    {
+                        "role": "system",
+                        "content": (
+                            "你是一位资深播客主持人，擅长从素材中提炼出有深度的讨论话题。\n"
+                            "根据以下文档内容（以及用户的提示），提炼出一个适合播客讨论的核心话题。\n"
+                            "输出严格遵循 JSON 格式，字段：\n"
+                            "  topic: 话题名称（10-20字）\n"
+                            "  reason: 选题理由（50字内）\n"
+                            "  search_queries: 补充搜索查询列表（3-4条，用于获取背景信息）\n"
+                            "只输出 JSON，不要加 Markdown 围栏。"
+                        ),
+                    },
+                    {
+                        "role": "user",
+                        "content": f"文档内容摘要：\n{doc_summary[:2000]}{user_prompt_hint}",
+                    },
+                ]
+                raw_topic = await orchestrator._llm.chat(
+                    derive_messages, temperature=0.5, max_tokens=512)
+                raw_topic = raw_topic.strip().lstrip(
+                    "```json").lstrip("```").rstrip("```").strip()
+                try:
+                    topic = json.loads(raw_topic)
+                except Exception:
+                    topic_text = payload.user_prompt or "文档内容讨论"
+                    topic = {
+                        "topic": topic_text,
+                        "reason": "基于用户上传的文档内容",
+                        "search_queries": [topic_text, f"{topic_text} 相关背景"],
+                    }
+                news_items = []  # no news in document mode
             else:
-                recent_topics = orchestrator._load_recent_topics(limit=20)
-                topic = await orchestrator.host.select_topic(news_items, recent_topics=recent_topics)
+                # --- Topic mode: fetch news and select topic ---
+                _tasks[task_id].update(
+                    {"stage": "news", "detail": "正在获取资讯..."})
+                news_items = await orchestrator._news.get_topic_news(
+                    topic=payload.topic, max_results=payload.max_news_results
+                )
+                if not news_items:
+                    raise RuntimeError("未获取到相关资讯")
+
+                _tasks[task_id].update(
+                    {"stage": "topic", "detail": "正在分析选定话题..."})
+                if payload.topic.strip():
+                    selected_topic = payload.topic.strip()
+                    topic = {
+                        "topic": selected_topic,
+                        "reason": "用户手动选择话题",
+                        "search_queries": [
+                            selected_topic,
+                            f"{selected_topic} 最新进展",
+                            f"{selected_topic} 行业争议",
+                        ],
+                    }
+                else:
+                    recent_topics = orchestrator._load_recent_topics(limit=20)
+                    topic = await orchestrator.host.select_topic(
+                        news_items, recent_topics=recent_topics)
+
             search_queries = topic.get("search_queries", [])[
                 :payload.max_search_queries]
 
@@ -336,22 +393,45 @@ async def script_preview_task(req: ScriptPreviewRequest | None = None):
                 rag_docs = await kb.query(
                     query, top_k=4, collection=BACKGROUND_MATERIAL, scope=KNOWLEDGE_SCOPE_GLOBAL
                 )
+                doc_snippets: list[str] = []
+                if payload.document_session_id:
+                    try:
+                        doc_docs = await kb.query(
+                            query, top_k=4, collection=BACKGROUND_MATERIAL,
+                            scope=KNOWLEDGE_SCOPE_TASK,
+                            task_id=payload.document_session_id,
+                        )
+                        doc_snippets = [d.get("content", "")
+                                        for d in doc_docs if d.get("content")]
+                    except Exception:
+                        pass
                 rag_snippets = [d.get("content", "")
                                 for d in rag_docs if d.get("content")]
-                decision = await orchestrator.host.decide_need_fresh_search(query, rag_snippets)
+                combined_snippets = doc_snippets + rag_snippets
+                decision = await orchestrator.host.decide_need_fresh_search(query, combined_snippets)
                 need_fresh_search = bool(
                     decision.get("need_fresh_search", False))
-                if not rag_snippets:
+                if not combined_snippets:
                     need_fresh_search = True
                 if need_fresh_search:
                     focus_query = decision.get("focus", "").strip() or query
-                    detailed_info.append(await orchestrator._news.search_detail(focus_query))
+                    tavily_result = await orchestrator._news.search_detail(focus_query)
+                    if payload.document_session_id and doc_snippets:
+                        doc_prefix = "【文档参考】\n" + "\n".join(
+                            f"- {s[:300]}" for s in doc_snippets[:3])
+                        tavily_result = DetailedInfo(
+                            query=tavily_result.query,
+                            answer=doc_prefix + "\n\n" + tavily_result.answer,
+                            results=tavily_result.results,
+                        )
+                    detailed_info.append(tavily_result)
                 else:
+                    label = "基于文档及知识库内容整理：" if payload.document_session_id else "基于知识库历史资料整理："
                     rag_answer = "\n\n".join(
-                        f"- {txt[:300]}" for txt in rag_snippets[:4])
+                        f"- {txt[:300]}" for txt in combined_snippets[:4])
                     detailed_info.append(DetailedInfo(
                         query=query,
-                        answer=f"基于知识库历史资料整理：\n{rag_answer}" if rag_answer else "",
+                        answer=f"{label}\n{rag_answer}" if rag_answer else "",
                         results=[],
                     ))
 
@@ -362,14 +442,37 @@ async def script_preview_task(req: ScriptPreviewRequest | None = None):
                         for info in detailed_info], selected_names
             )
 
-            episode = Episode(topic=plan.topic, title=plan.topic,
-                              summary=plan.summary, guests=selected_names)
+            episode = Episode(
+                topic=plan.topic, title=plan.topic,
+                summary=plan.summary, guests=selected_names,
+                document_session_id=payload.document_session_id,
+                user_prompt=payload.user_prompt or "",
+            )
             rag_context = ""
             try:
                 rag_context = await kb.build_rag_context(plan.topic, top_k_per_collection=3)
             except Exception:
                 logger.warning(
                     "RAG retrieval failed in preview task, continuing without")
+
+            # Prepend uploaded-doc context in document mode
+            if payload.document_session_id:
+                try:
+                    doc_rag_docs = await kb.query(
+                        plan.topic, top_k=6,
+                        collection=BACKGROUND_MATERIAL,
+                        scope=KNOWLEDGE_SCOPE_TASK,
+                        task_id=payload.document_session_id,
+                    )
+                    doc_snippets = [d.get("content", "")
+                                    for d in doc_rag_docs if d.get("content")]
+                    if doc_snippets:
+                        doc_block = "【上传文档内容】\n" + "\n\n".join(
+                            f"- {s[:400]}" for s in doc_snippets[:6])
+                        rag_context = doc_block + "\n\n" + rag_context if rag_context else doc_block
+                except Exception:
+                    logger.warning(
+                        "Doc-scoped RAG failed in preview task, continuing without")
 
             output_dir = settings.ensure_output_dir()
             run_logger = EpisodeRunLogger(
@@ -559,6 +662,82 @@ async def retime_episode_audio(episode_id: str, req: EpisodeAudioRetimeRequest):
 
 
 # ---------------------------------------------------------------------------
+# POST /api/documents/upload — parse & index uploaded documents
+# ---------------------------------------------------------------------------
+
+ALLOWED_EXTENSIONS = {".pdf", ".docx", ".doc",
+                      ".txt", ".text", ".md", ".markdown"}
+MAX_FILE_SIZE_MB = 20
+
+
+@router.post("/documents/upload", response_model=DocumentUploadResponse)
+async def upload_documents(files: list[UploadFile] = File(...)):
+    """Parse uploaded documents, chunk them, and store in ChromaDB.
+
+    Returns a ``document_session_id`` to reference these docs in a subsequent
+    ``/api/generate`` call.
+    """
+    import tempfile
+    import shutil
+
+    if not files:
+        raise HTTPException(status_code=400, detail="至少需要上传一个文件")
+
+    doc_service = get_document_service()
+    saved_paths: list[Path] = []
+    filenames: list[str] = []
+
+    try:
+        for upload in files:
+            fname = upload.filename or "upload"
+            suffix = Path(fname).suffix.lower()
+            if suffix not in ALLOWED_EXTENSIONS:
+                raise HTTPException(
+                    status_code=415,
+                    detail=f"不支持的文件格式 '{suffix}'，支持：{', '.join(sorted(ALLOWED_EXTENSIONS))}",
+                )
+
+            # Save to temp file
+            tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+            try:
+                content = await upload.read()
+                if len(content) > MAX_FILE_SIZE_MB * 1024 * 1024:
+                    raise HTTPException(
+                        status_code=413,
+                        detail=f"文件 '{fname}' 超过 {MAX_FILE_SIZE_MB}MB 限制",
+                    )
+                tmp.write(content)
+                tmp.flush()
+                saved_paths.append(Path(tmp.name))
+                filenames.append(fname)
+            finally:
+                tmp.close()
+
+        session_id, infos = await doc_service.ingest_files(
+            saved_paths, filenames=filenames
+        )
+    finally:
+        for p in saved_paths:
+            try:
+                p.unlink(missing_ok=True)
+            except Exception:
+                pass
+
+    file_results = [DocumentFileInfo(**info) for info in infos]
+    total_chunks = sum(f.chunks for f in file_results)
+
+    logger.info(
+        "Document upload: session=%s, files=%d, total_chunks=%d",
+        session_id, len(file_results), total_chunks,
+    )
+    return DocumentUploadResponse(
+        document_session_id=session_id,
+        files=file_results,
+        total_chunks=total_chunks,
+    )
+
+
+# ---------------------------------------------------------------------------
 # POST /api/generate — trigger new episode
 # ---------------------------------------------------------------------------
 
@@ -594,6 +773,8 @@ async def generate_episode(req: GenerateRequest | None = None):
                 progress=_progress,
                 topic=payload.topic,
                 selected_guest_names=payload.selected_guests,
+                document_session_id=payload.document_session_id,
+                user_prompt=payload.user_prompt,
             )
             _tasks[task_id].update({
                 "status": "completed",

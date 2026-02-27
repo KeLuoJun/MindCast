@@ -13,6 +13,9 @@ class GenerateRequest(BaseModel):
     """Request body for triggering a new episode generation."""
     topic: str = ""
     selected_guests: list[str] = Field(default_factory=list, max_length=3)
+    # Document mode
+    document_session_id: str | None = None  # from /api/documents/upload
+    user_prompt: str = ""                   # user brief / instructions
 
 
 class ScriptPreviewRequest(BaseModel):
@@ -21,6 +24,9 @@ class ScriptPreviewRequest(BaseModel):
     max_search_queries: int = Field(default=3, ge=1, le=5)
     topic: str = ""
     selected_guests: list[str] = Field(default_factory=list, max_length=3)
+    # Document mode
+    document_session_id: str | None = None
+    user_prompt: str = ""
 
 
 class GuestProfileIn(BaseModel):
@@ -120,6 +126,22 @@ class TaskCreatedResponse(BaseModel):
     """Returned when a background generation task is created."""
     task_id: str
     message: str = "播客生成任务已创建"
+
+
+class DocumentFileInfo(BaseModel):
+    """Per-file ingestion result."""
+    filename: str
+    status: str        # 'ok' | 'error' | 'empty'
+    chunks: int
+    char_count: int = 0
+    error: str = ""
+
+
+class DocumentUploadResponse(BaseModel):
+    """Returned after uploading and indexing documents."""
+    document_session_id: str
+    files: list[DocumentFileInfo]
+    total_chunks: int
 
 
 class EpisodeSummary(BaseModel):
