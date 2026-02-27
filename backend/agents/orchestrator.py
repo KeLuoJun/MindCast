@@ -52,6 +52,9 @@ class OrchestratorState(TypedDict, total=False):
     rag_context: str
     active_guests: list[GuestAgent]  # Guests for this specific run
     speaker_voice_map: dict[str, str]
+    # Document mode extras
+    document_session_id: str | None     # session ID for uploaded docs in ChromaDB
+    user_prompt: str                    # user-supplied brief / instructions
 
 
 class PodcastOrchestrator:
@@ -84,6 +87,7 @@ class PodcastOrchestrator:
         graph = StateGraph(OrchestratorState)
         graph.add_node("fetch_news", self._node_fetch_news)
         graph.add_node("select_topic", self._node_select_topic)
+        graph.add_node("derive_doc_topic", self._node_derive_doc_topic)
         graph.add_node("deep_research", self._node_deep_research)
         graph.add_node("retrieve_rag", self._node_retrieve_rag)
         graph.add_node("plan_episode", self._node_plan_episode)
@@ -93,9 +97,16 @@ class PodcastOrchestrator:
         graph.add_node("stitch_audio", self._node_stitch_audio)
         graph.add_node("save_episode", self._node_save_episode)
 
-        graph.add_edge(START, "fetch_news")
+        # Conditional start: document mode bypasses news fetching
+        graph.add_conditional_edges(
+            START,
+            lambda state: "derive_doc_topic" if state.get(
+                "document_session_id") else "fetch_news",
+            {"derive_doc_topic": "derive_doc_topic", "fetch_news": "fetch_news"},
+        )
         graph.add_edge("fetch_news", "select_topic")
         graph.add_edge("select_topic", "deep_research")
+        graph.add_edge("derive_doc_topic", "deep_research")
         graph.add_edge("deep_research", "retrieve_rag")
         graph.add_edge("retrieve_rag", "plan_episode")
         graph.add_edge("plan_episode", "generate_dialogue")
@@ -110,10 +121,27 @@ class PodcastOrchestrator:
         names = [name.strip() for name in (selected_guest_names or [])
                  if name and name.strip()]
         if names:
-            unknown = [name for name in names if name not in self._guest_pool]
+            # Use case-insensitive matching and strip to handle potential encoding/ghost chars
+            available_names = {k.strip().lower(): v for k,
+                               v in self._guest_pool.items()}
+            matched_agents = []
+            unknown = []
+
+            for n in names:
+                n_clean = n.strip().lower()
+                if n_clean in available_names:
+                    matched_agents.append(available_names[n_clean])
+                else:
+                    unknown.append(n)
+
             if unknown:
-                raise ValueError(f"Unknown guests: {', '.join(unknown)}")
-            return [self._guest_pool[name] for name in names]
+                logger.warning(
+                    "Unknown guests in list: %s. Using first available.", unknown)
+                # Fallback to pool instead of crashing, or strictly log and skip
+                if not matched_agents:
+                    return [list(self._guest_pool.values())[0]]
+
+            return matched_agents
 
         num_guests = random.randint(1, 2)
         selected_names = random.sample(
@@ -126,6 +154,8 @@ class PodcastOrchestrator:
         *,
         topic: str = "",
         selected_guest_names: list[str] | None = None,
+        document_session_id: str | None = None,
+        user_prompt: str = "",
     ) -> Episode:
         """Run the complete podcast generation pipeline via LangGraph."""
         active_guests = self._build_active_guests(selected_guest_names)
@@ -133,8 +163,13 @@ class PodcastOrchestrator:
         speaker_voice_map = self._build_speaker_voice_map(active_guests)
 
         normalized_topic = (topic or "").strip()
-        episode = Episode(guests=selected_names,
-                          topic=normalized_topic, title=normalized_topic)
+        episode = Episode(
+            guests=selected_names,
+            topic=normalized_topic,
+            title=normalized_topic,
+            document_session_id=document_session_id,
+            user_prompt=user_prompt,
+        )
         output_dir = settings.ensure_output_dir()
         run_log = EpisodeRunLogger(output_dir / "logs" / f"{episode.id}.jsonl")
         episode.generation_log_path = str(run_log.log_path)
@@ -146,7 +181,8 @@ class PodcastOrchestrator:
         run_log.event(
             "pipeline",
             "episode generation started",
-            payload={"episode_id": episode.id, "guests": episode.guests},
+            payload={"episode_id": episode.id, "guests": episode.guests,
+                     "mode": "document" if document_session_id else "topic"},
         )
 
         try:
@@ -162,6 +198,8 @@ class PodcastOrchestrator:
                     "rag_context": "",
                     "active_guests": active_guests,
                     "speaker_voice_map": speaker_voice_map,
+                    "document_session_id": document_session_id,
+                    "user_prompt": user_prompt,
                 }
             )
             result_episode = final_state["episode"]
@@ -204,6 +242,76 @@ class PodcastOrchestrator:
         callback = state.get("progress")
         if callback:
             await callback(stage, detail)
+
+    async def _node_derive_doc_topic(self, state: OrchestratorState) -> OrchestratorState:
+        """Document mode: derive episode topic from uploaded docs + user prompt."""
+        episode = state["episode"]
+        session_id = state.get(
+            "document_session_id") or episode.document_session_id
+        user_prompt = (state.get("user_prompt")
+                       or episode.user_prompt or "").strip()
+
+        await self._emit_progress(state, "documents", "正在分析上传的文档内容…")
+
+        # Retrieve a representative sample from the uploaded documents
+        from backend.services.document_service import get_document_service
+        from backend.knowledge import get_knowledge_base
+        from backend.knowledge.chroma_kb import BACKGROUND_MATERIAL, KNOWLEDGE_SCOPE_TASK
+
+        doc_service = get_document_service()
+        doc_summary = await doc_service.get_document_summary(session_id or "")
+
+        if not doc_summary:
+            raise RuntimeError("未能从上传的文档中提取内容，请检查文件格式")
+
+        await self._emit_progress(state, "documents", "文档内容提取完成，正在生成话题…")
+
+        # Ask host agent to derive a structured topic from the document + user prompt
+        prompt_hint = f"\n\n用户提示：{user_prompt}" if user_prompt else ""
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "你是一位资深播客主持人，擅长从素材中提炼出有深度的讨论话题。\n"
+                    "根据以下文档内容（以及用户的提示），提炼出一个适合播客讨论的核心话题。\n"
+                    "输出严格遵循 JSON 格式，字段：\n"
+                    "  topic: 话题名称（10-20字）\n"
+                    "  reason: 选题理由（50字内）\n"
+                    "  search_queries: 补充搜索查询列表（3-4条，用于获取背景信息）\n"
+                    "只输出 JSON，不要加 Markdown 围栏。"
+                ),
+            },
+            {
+                "role": "user",
+                "content": f"文档内容摘要：\n{doc_summary[:2000]}{prompt_hint}",
+            },
+        ]
+
+        import json as _json
+        raw = await self._llm.chat(messages, temperature=0.5, max_tokens=512)
+        raw = raw.strip().lstrip("```json").lstrip("```").rstrip("```").strip()
+        try:
+            topic = _json.loads(raw)
+        except Exception:
+            # Fallback: use user_prompt as topic
+            topic_text = user_prompt or "文档内容讨论"
+            topic = {
+                "topic": topic_text,
+                "reason": "基于用户上传的文档内容",
+                "search_queries": [topic_text, f"{topic_text} 相关背景", f"{topic_text} 最新进展"],
+            }
+
+        # Update episode with derived topic
+        episode.topic = topic.get("topic", user_prompt or "文档内容讨论")
+        episode.title = episode.topic
+
+        await self._emit_progress(
+            state,
+            "documents",
+            f"话题提炼完成：{episode.topic}",
+            payload={**topic, "session_id": session_id},
+        )
+        return {"episode": episode, "topic": topic}
 
     async def _node_fetch_news(self, state: OrchestratorState) -> OrchestratorState:
         episode = state["episode"]
@@ -292,7 +400,16 @@ class PodcastOrchestrator:
 
     async def _node_deep_research(self, state: OrchestratorState) -> OrchestratorState:
         topic = state["topic"]
-        await self._emit_progress(state, "research", "正在深度搜索…")
+        session_id = state.get("document_session_id") or (state.get(
+            # type: ignore[union-attr]
+            "episode") or {}).get("document_session_id")
+        is_doc_mode = bool(session_id)
+
+        await self._emit_progress(
+            state,
+            "research",
+            "正在深度搜索（优先检索上传文档…）" if is_doc_mode else "正在深度搜索…",
+        )
         search_queries = topic.get("search_queries", [])[:5]
         detailed_info: list[DetailedInfo] = []
         kb = get_knowledge_base()
@@ -306,7 +423,20 @@ class PodcastOrchestrator:
                          1, "total": len(search_queries)},
             )
 
-            # 1) Retrieve from long-term RAG first
+            # 1) In document mode: retrieve from task-scoped uploaded docs first
+            doc_snippets: list[str] = []
+            if is_doc_mode and session_id:
+                doc_docs = await kb.query(
+                    query,
+                    top_k=5,
+                    collection=BACKGROUND_MATERIAL,
+                    scope=KNOWLEDGE_SCOPE_TASK,
+                    task_id=session_id,
+                )
+                doc_snippets = [d.get("content", "")
+                                for d in doc_docs if d.get("content")]
+
+            # 2) Retrieve from long-term global RAG
             rag_docs = await kb.query(
                 query,
                 top_k=4,
@@ -316,25 +446,40 @@ class PodcastOrchestrator:
             rag_snippets = [d.get("content", "")
                             for d in rag_docs if d.get("content")]
 
-            # 2) Let host agent decide whether fresh web search is needed
-            decision = await self.host.decide_need_fresh_search(query, rag_snippets)
+            # Merge: document snippets take priority
+            combined_snippets = doc_snippets + \
+                [s for s in rag_snippets if s not in doc_snippets]
+
+            # 3) Let host agent decide whether fresh web search is needed
+            decision = await self.host.decide_need_fresh_search(query, combined_snippets)
             need_fresh_search = bool(decision.get("need_fresh_search", False))
-            if not rag_snippets:
+            if not combined_snippets:
                 need_fresh_search = True
 
             if need_fresh_search:
                 focus_query = decision.get("focus", "").strip() or query
                 info = await self._news.search_detail(focus_query)
                 info_source = "tavily"
+                # Prepend document context to the answer if available
+                if doc_snippets:
+                    doc_context = "\n\n".join(
+                        f"- {s[:300]}" for s in doc_snippets[:3])
+                    info = DetailedInfo(
+                        query=info.query,
+                        answer=(
+                            f"【文档内容】\n{doc_context}\n\n【网络信息】\n{info.answer or ''}" if info.answer else f"【文档内容】\n{doc_context}"),
+                        results=info.results,
+                    )
             else:
-                rag_answer = "\n\n".join(
-                    f"- {txt[:300]}" for txt in rag_snippets[:4])
+                combined_answer = "\n\n".join(
+                    f"- {txt[:300]}" for txt in combined_snippets[:5])
+                source_label = "文档内容及知识库" if is_doc_mode else "知识库历史资料"
                 info = DetailedInfo(
                     query=query,
-                    answer=f"基于知识库历史资料整理：\n{rag_answer}" if rag_answer else "",
+                    answer=f"基于{source_label}整理：\n{combined_answer}" if combined_answer else "",
                     results=[],
                 )
-                info_source = "rag"
+                info_source = "rag+doc" if is_doc_mode else "rag"
 
             detailed_info.append(info)
             state["run_logger"].event(
@@ -346,6 +491,7 @@ class PodcastOrchestrator:
                     "need_fresh_search": need_fresh_search,
                     "decision_reason": decision.get("reason", ""),
                     "rag_hit_count": len(rag_docs),
+                    "doc_hit_count": len(doc_snippets),
                     "answer": info.answer,
                     "result_count": len(info.results),
                     "result_titles": [item.title for item in info.results],
@@ -364,6 +510,9 @@ class PodcastOrchestrator:
         """Retrieve relevant knowledge from the RAG database."""
         topic = state["topic"]
         topic_text = topic.get("topic", "")
+        session_id = state.get("document_session_id") or getattr(
+            state.get("episode"), "document_session_id", None)
+
         if not topic_text:
             return {"rag_context": ""}
 
@@ -373,6 +522,23 @@ class PodcastOrchestrator:
             rag_context = await kb.build_rag_context(
                 topic_text, top_k_per_collection=3,
             )
+            # In document mode: prepend task-scoped document context
+            if session_id:
+                doc_docs = await kb.query(
+                    topic_text,
+                    top_k=6,
+                    collection=BACKGROUND_MATERIAL,
+                    scope=KNOWLEDGE_SCOPE_TASK,
+                    task_id=session_id,
+                )
+                if doc_docs:
+                    doc_snippets = "\n\n".join(
+                        f"[文档片段] {d.get('content', '')[:400]}"
+                        for d in doc_docs if d.get("content")
+                    )
+                    rag_context = f"【上传文档内容】\n{doc_snippets}\n\n{rag_context}".strip(
+                    )
+
             stats = kb.get_collection_stats()
             await self._emit_progress(
                 state,
